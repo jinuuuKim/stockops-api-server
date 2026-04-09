@@ -105,6 +105,7 @@ public class InventoryQueryService {
                 lot == null ? null : lot.getExpiryDate(),
                 nullSafeInt(inventory.getQuantity()),
                 nullSafeInt(inventory.getReservedQuantity()),
+                inventory.getStatus() == null ? "ACTIVE" : inventory.getStatus().name(),
                 inventory.getCreatedAt(),
                 inventory.getUpdatedAt());
     }

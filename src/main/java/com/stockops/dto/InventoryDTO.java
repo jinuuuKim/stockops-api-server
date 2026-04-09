@@ -18,6 +18,7 @@ import java.time.LocalDate;
  * @param expiryDate lot expiry date
  * @param quantity available quantity
  * @param reservedQuantity reserved quantity
+ * @param status inventory status (ACTIVE, RESERVED, QUARANTINE, EXPIRED)
  * @param createdAt creation timestamp
  * @param updatedAt last update timestamp
  * @author StockOps Team
@@ -36,6 +37,7 @@ public record InventoryDTO(
         LocalDate expiryDate,
         int quantity,
         int reservedQuantity,
+        String status,
         Instant createdAt,
         Instant updatedAt
 ) {
