@@ -30,6 +30,14 @@ public interface ExpiryAlertRepository extends JpaRepository<ExpiryAlert, Long> 
     List<ExpiryAlert> findByAlertLevelAndAcknowledgedFalse(String alertLevel);
 
     /**
+     * Returns the number of unacknowledged alerts for the supplied alert level.
+     *
+     * @param alertLevel alert severity level
+     * @return matching unacknowledged alert count
+     */
+    long countByAlertLevelAndAcknowledgedFalse(String alertLevel);
+
+    /**
      * Returns alert history for a product.
      *
      * @param productId product id

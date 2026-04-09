@@ -44,5 +44,14 @@ public interface InventoryTransactionRepository extends JpaRepository<InventoryT
     @Query("SELECT t FROM InventoryTransaction t WHERE t.createdAt BETWEEN :start AND :end ORDER BY t.createdAt DESC")
     List<InventoryTransaction> findByDateRange(@Param("start") Instant start, @Param("end") Instant end);
 
+    /**
+     * Counts transactions created within a date range.
+     *
+     * @param start inclusive range start
+     * @param end inclusive range end
+     * @return matching transaction count
+     */
+    long countByCreatedAtBetween(Instant start, Instant end);
+
     List<InventoryTransaction> findTop50ByOrderByCreatedAtDesc();
 }

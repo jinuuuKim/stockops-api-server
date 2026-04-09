@@ -1,0 +1,77 @@
+spring:
+  application:
+    name: stockops
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: true
+  profiles:
+    default: local
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+jwt:
+  secret: ${JWT_SECRET:StockOpsSecretKeyForJWTTokenGenerationMustBeLongEnough2024}
+  expiration: 86400000
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    url: jdbc:h2:mem:stockops;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: ${STOCKOPS_DATASOURCE_URL:jdbc:postgresql://localhost:5432/stockops}
+    username: ${STOCKOPS_DATASOURCE_USERNAME:stockops}
+    password: ${STOCKOPS_DATASOURCE_PASSWORD:stockops}
+    driver-class-name: org.postgresql.Driver
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: ${STOCKOPS_DATASOURCE_URL}
+    username: ${STOCKOPS_DATASOURCE_USERNAME}
+    password: ${STOCKOPS_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+---
+spring:
+  config:
+    activate:
+      on-profile: pi
+  datasource:
+    url: ${STOCKOPS_DATASOURCE_URL:jdbc:postgresql://192.168.0.11:5432/stockops}
+    username: ${STOCKOPS_DATASOURCE_USERNAME:stockops}
+    password: ${STOCKOPS_DATASOURCE_PASSWORD:stockops}
+    driver-class-name: org.postgresql.Driver

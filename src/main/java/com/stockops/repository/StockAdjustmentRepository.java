@@ -28,4 +28,12 @@ public interface StockAdjustmentRepository extends JpaRepository<StockAdjustment
      * @return matching adjustments
      */
     List<StockAdjustment> findByInventoryId(Long inventoryId);
+
+    /**
+     * Counts adjustments by workflow status.
+     *
+     * @param status adjustment status
+     * @return matching adjustment count
+     */
+    long countByStatus(String status);
 }

@@ -70,6 +70,23 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
     List<Inventory> findByProductIdAndLotId(Long productId, Long lotId);
 
     /**
+     * Sums total inventory quantity across all rows.
+     *
+     * @return total stored quantity
+     */
+    @Query("SELECT COALESCE(SUM(COALESCE(i.quantity, 0)), 0) FROM Inventory i")
+    long sumInventoryQuantity();
+
+    /**
+     * Counts inventory rows whose available quantity is below the supplied threshold.
+     *
+     * @param threshold available quantity threshold
+     * @return matching low-stock inventory row count
+     */
+    @Query("SELECT COUNT(i) FROM Inventory i WHERE (COALESCE(i.quantity, 0) - COALESCE(i.reservedQuantity, 0)) < :threshold")
+    long countLowStockItems(@Param("threshold") int threshold);
+
+    /**
      * Loads an inventory row by id with a pessimistic write lock.
      *
      * @param id inventory id
