@@ -52,6 +52,8 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     List<Inventory> findByLocationId(Long locationId);
 
+    List<Inventory> findByLocationWarehouseId(Long warehouseId);
+
     /**
      * Finds all inventory rows associated with a lot.
      *
