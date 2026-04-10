@@ -1,8 +1,10 @@
 package com.stockops.service;
 
 import com.stockops.entity.Inventory;
+import com.stockops.entity.Location;
 import com.stockops.entity.Warehouse;
 import com.stockops.repository.InventoryRepository;
+import com.stockops.repository.LocationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ import java.util.Map;
 public class CenterInventoryAggregationService {
 
     private final WarehouseService warehouseService;
+    private final LocationRepository locationRepository;
     private final InventoryRepository inventoryRepository;
 
     /**
@@ -39,10 +42,14 @@ public class CenterInventoryAggregationService {
         int totalItems = 0;
 
         for (Warehouse warehouse : warehouses) {
-            List<Inventory> inventories = inventoryRepository.findByLocationWarehouseId(warehouse.getId());
-            for (Inventory inv : inventories) {
-                totalQuantity += inv.getQuantity();
-                totalItems++;
+            List<Location> locations = locationRepository.findByWarehouseId(warehouse.getId());
+            List<Long> locationIds = locations.stream().map(Location::getId).toList();
+            if (!locationIds.isEmpty()) {
+                List<Inventory> inventories = inventoryRepository.findAllByLocationIdIn(locationIds);
+                for (Inventory inv : inventories) {
+                    totalQuantity += inv.getQuantity();
+                    totalItems++;
+                }
             }
         }
 
