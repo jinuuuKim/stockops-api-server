@@ -3,8 +3,6 @@ package com.stockops.repository;
 import com.stockops.entity.PurchaseOrder;
 import com.stockops.entity.PurchaseOrderStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -21,6 +19,5 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, Lo
     
     List<PurchaseOrder> findByRequestingCenterIdAndStatus(Long centerId, PurchaseOrderStatus status);
     
-    @Query("SELECT COUNT(p) FROM PurchaseOrder p WHERE p.poNumber LIKE :prefix%")
-    long countByPoNumberPrefix(@Param("prefix") String prefix);
+    long countByPoNumberStartingWith(String prefix);
 }

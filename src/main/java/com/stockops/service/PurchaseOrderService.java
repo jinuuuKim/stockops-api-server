@@ -173,7 +173,7 @@ public class PurchaseOrderService {
 
     private String generatePoNumber() {
         String datePrefix = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-        long count = purchaseOrderRepository.countByPoNumberPrefix("PO-" + datePrefix) + 1;
+        long count = purchaseOrderRepository.countByPoNumberStartingWith("PO-" + datePrefix) + 1;
         return String.format("PO-%s-%03d", datePrefix, count);
     }
 }
