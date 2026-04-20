@@ -184,11 +184,9 @@ public class TelemetryIngestionService {
         return payload != null
                 && StringUtils.hasText(payload.siteId())
                 && StringUtils.hasText(payload.sensorId())
-                && StringUtils.hasText(payload.sensorType())
-                && StringUtils.hasText(payload.valueKind())
+                && payload.value() != null
                 && StringUtils.hasText(payload.status())
-                && StringUtils.hasText(payload.timestamp())
-                && StringUtils.hasText(payload.schemaVersion());
+                && StringUtils.hasText(payload.timestamp());
     }
 
     private Instant parseRecordedAt(final String timestamp) {
