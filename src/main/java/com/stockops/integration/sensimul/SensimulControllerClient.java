@@ -91,7 +91,7 @@ public class SensimulControllerClient {
         try {
             final ResponseEntity<String> response = sensimulRestTemplate.exchange(uri, HttpMethod.POST,
                     new HttpEntity<>(form, headers), String.class);
-            if (response.getStatusCode().is2xxSuccessful()) {
+            if (response.getStatusCode().is2xxSuccessful() || response.getStatusCode().is3xxRedirection()) {
                 return;
             }
             if (response.getStatusCode().is4xxClientError()) {
