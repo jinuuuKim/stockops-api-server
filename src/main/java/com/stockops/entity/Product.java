@@ -7,9 +7,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
-import lombok.Data;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.SQLRestriction;
 
 /**
@@ -19,7 +21,8 @@ import org.hibernate.annotations.SQLRestriction;
  * @author StockOps Team
  * @since 1.0
  */
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "products")
 @NoArgsConstructor
@@ -29,6 +32,7 @@ public class Product extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Setter(AccessLevel.NONE)
     private Long id;
 
     @Column(name = "barcode", nullable = false)

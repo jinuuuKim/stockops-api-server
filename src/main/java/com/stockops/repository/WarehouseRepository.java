@@ -18,6 +18,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
     Optional<Warehouse> findByCenterIdAndCode(Long centerId, String code);
     boolean existsByCenterIdAndCode(Long centerId, String code);
 
-    @Query("SELECT w FROM Warehouse w WHERE w.center.id = :centerId AND w.status = 'ACTIVE'")
+    @Query("SELECT w FROM Warehouse w WHERE w.center.id = :centerId AND w.status = com.stockops.entity.WarehouseStatus.ACTIVE")
     List<Warehouse> findActiveByCenterId(@Param("centerId") Long centerId);
 }

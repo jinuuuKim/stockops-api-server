@@ -42,5 +42,6 @@ public class Warehouse extends BaseEntity {
     private String phone;
 
     @Column(name = "status", nullable = false)
-    private String status = "ACTIVE";
+    @Enumerated(EnumType.STRING)
+    private WarehouseStatus status = WarehouseStatus.ACTIVE;
 }
