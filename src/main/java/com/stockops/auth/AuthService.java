@@ -99,6 +99,7 @@ public class AuthService {
     }
 
     private LoginResponse buildResponse(final String accessToken, final User user) {
+        final var scopeMetadata = scopeAccessService.buildUserProfile(user).toDto();
         return new LoginResponse(
                 accessToken,
                 TOKEN_TYPE,
@@ -109,7 +110,7 @@ public class AuthService {
                         user.getName(),
                         user.getRole().getName(),
                         rolePermissionRepository.findPermissionCodesByRoleId(user.getRole().getId()),
-                        scopeAccessService.buildUserProfile(user).toDto())));
+                        scopeMetadata));
     }
 
     private String resolveBearerToken(final String authorizationHeader) {
