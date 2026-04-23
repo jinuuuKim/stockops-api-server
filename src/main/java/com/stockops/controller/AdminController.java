@@ -1,5 +1,9 @@
 package com.stockops.controller;
 
+import com.stockops.repository.ProductRepository;
+import com.stockops.repository.PurchaseOrderRepository;
+import com.stockops.repository.UserRepository;
+import com.stockops.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -11,12 +15,24 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdminController {
 
+    private final UserRepository userRepository;
+    private final ProductRepository productRepository;
+    private final InventoryRepository inventoryRepository;
+    private final PurchaseOrderRepository purchaseOrderRepository;
+
     @GetMapping("/stats")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getStats() {
+        long totalUsers = userRepository.count();
+        long totalProducts = productRepository.count();
+        long totalOrders = purchaseOrderRepository.count();
+        long lowStockCount = inventoryRepository.countLowStockItems(10);
+
         return ResponseEntity.ok(Map.of(
-            "status", "ok",
-            "message", "Admin stats endpoint"
+            "totalUsers", totalUsers,
+            "totalProducts", totalProducts,
+            "totalOrders", totalOrders,
+            "lowStockCount", lowStockCount
         ));
     }
 
