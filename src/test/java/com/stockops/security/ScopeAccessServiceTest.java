@@ -61,7 +61,12 @@ class ScopeAccessServiceTest {
         user.setScopeAssignments(Set.of(new ScopeAssignment(ScopeType.WAREHOUSE, 1L, 10L)));
 
         when(centerRepository.existsById(1L)).thenReturn(true);
-        when(warehouseRepository.existsById(10L)).thenReturn(true);
+        Warehouse warehouse = new Warehouse();
+        warehouse.setId(10L);
+        Center center = new Center();
+        center.setId(1L);
+        warehouse.setCenter(center);
+        when(warehouseRepository.findById(10L)).thenReturn(Optional.of(warehouse));
 
         ScopeAccessProfile profile = scopeAccessService.buildUserProfile(user);
 
