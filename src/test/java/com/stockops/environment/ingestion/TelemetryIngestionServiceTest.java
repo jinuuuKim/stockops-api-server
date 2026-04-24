@@ -83,7 +83,7 @@ class TelemetryIngestionServiceTest {
     @Test
     void ingestSkipsMalformedPayload() {
         telemetryIngestionService.ingest(new SensimulPayload(
-                "site-a",
+                "",
                 "sensor-01",
                 "temperature",
                 "temperature",

@@ -120,12 +120,12 @@ class ExcelImportServiceTest {
 
             final var row = sheet.createRow(1);
             row.createCell(0).setCellValue("IN-1");
-            row.createCell(1).setCellValue(LocalDate.of(2026, 4, 21).toString());
+            row.createCell(1).setCellValue(LocalDate.of(2026, 4, 21));
             row.createCell(2).setCellValue("Scoped Supplier");
             row.createCell(3).setCellValue("P-101");
             row.createCell(4).setCellValue("LOT-101");
-            row.createCell(5).setCellValue(LocalDate.of(2026, 5, 21).toString());
-            row.createCell(6).setCellValue("5");
+            row.createCell(5).setCellValue(LocalDate.of(2026, 5, 21));
+            row.createCell(6).setCellValue(5);
             row.createCell(7).setCellValue("LOC-11");
 
             workbook.write(outputStream);
