@@ -7,17 +7,20 @@ import com.stockops.dto.OutboundItemDTO;
 import com.stockops.entity.Inventory;
 import com.stockops.entity.InventoryStatus;
 import com.stockops.entity.InventoryTransaction;
+import com.stockops.entity.Location;
 import com.stockops.entity.Lot;
 import com.stockops.entity.LotStatus;
 import com.stockops.entity.Outbound;
 import com.stockops.entity.OutboundItem;
 import com.stockops.entity.Product;
+import com.stockops.entity.WarehouseStatus;
 import com.stockops.exception.ForbiddenException;
 import com.stockops.exception.InsufficientStockException;
 import com.stockops.exception.InvalidOperationException;
 import com.stockops.exception.ResourceNotFoundException;
 import com.stockops.repository.InventoryRepository;
 import com.stockops.repository.InventoryTransactionRepository;
+import com.stockops.repository.LocationRepository;
 import com.stockops.repository.LotRepository;
 import com.stockops.repository.OutboundItemRepository;
 import com.stockops.repository.OutboundRepository;
@@ -63,6 +66,7 @@ public class OutboundService {
     private final InventoryTransactionRepository inventoryTransactionRepository;
     private final LotRepository lotRepository;
     private final ProductRepository productRepository;
+    private final LocationRepository locationRepository;
     private final ScopeGuard scopeGuard;
     private final CurrentUserProvider currentUserProvider;
 
@@ -240,6 +244,8 @@ public class OutboundService {
                     break;
                 }
 
+                assertLocationWarehouseNotClosed(inventory.getLocationId());
+
                 final int availableQuantity = nullSafeQuantity(inventory.getQuantity());
                 if (availableQuantity <= 0) {
                     continue;
@@ -370,6 +376,15 @@ public class OutboundService {
     private Product findProductById(final Long productId) {
         return productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + productId));
+    }
+
+    private void assertLocationWarehouseNotClosed(final Long locationId) {
+        final Location location = locationRepository.findById(locationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Location not found: " + locationId));
+        if (location.getWarehouse() != null && location.getWarehouse().getStatus() == WarehouseStatus.CLOSED) {
+            throw new InvalidOperationException(
+                    "Outbound not allowed from closed warehouse: " + location.getWarehouse().getName());
+        }
     }
 
     private OutboundItem createAllocatedItem(final Long outboundId,

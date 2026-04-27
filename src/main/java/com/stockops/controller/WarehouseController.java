@@ -1,5 +1,6 @@
 package com.stockops.controller;
 
+import com.stockops.dto.CloseWarehouseRequest;
 import com.stockops.entity.Warehouse;
 import com.stockops.service.WarehouseService;
 import lombok.RequiredArgsConstructor;
@@ -63,5 +64,11 @@ public class WarehouseController {
     public ResponseEntity<Void> deleteWarehouse(@PathVariable Long id) {
         warehouseService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/close")
+    @PreAuthorize("@permissionChecker.hasPermission('WAREHOUSE_UPDATE')")
+    public Warehouse closeWarehouse(@PathVariable Long id, @RequestBody CloseWarehouseRequest request) {
+        return warehouseService.close(id, request.reason());
     }
 }

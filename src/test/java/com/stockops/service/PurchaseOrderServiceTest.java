@@ -10,8 +10,13 @@ import com.stockops.entity.Center;
 import com.stockops.entity.PurchaseOrder;
 import com.stockops.entity.Warehouse;
 import com.stockops.exception.ForbiddenException;
+import com.stockops.repository.InboundItemRepository;
+import com.stockops.repository.InboundRepository;
+import com.stockops.repository.LocationRepository;
+import com.stockops.repository.LotRepository;
 import com.stockops.repository.PurchaseOrderItemRepository;
 import com.stockops.repository.PurchaseOrderRepository;
+import com.stockops.repository.PurchaseOrderShipmentItemRepository;
 import com.stockops.repository.PurchaseOrderShipmentRepository;
 import com.stockops.security.ScopeGuard;
 import java.util.List;
@@ -35,6 +40,9 @@ class PurchaseOrderServiceTest {
     private PurchaseOrderShipmentRepository shipmentRepository;
 
     @Mock
+    private PurchaseOrderShipmentItemRepository shipmentItemRepository;
+
+    @Mock
     private CenterService centerService;
 
     @Mock
@@ -45,6 +53,21 @@ class PurchaseOrderServiceTest {
 
     @Mock
     private ScopeGuard scopeGuard;
+
+    @Mock
+    private InboundRepository inboundRepository;
+
+    @Mock
+    private InboundItemRepository inboundItemRepository;
+
+    @Mock
+    private InventoryService inventoryService;
+
+    @Mock
+    private LocationRepository locationRepository;
+
+    @Mock
+    private LotRepository lotRepository;
 
     @InjectMocks
     private PurchaseOrderService purchaseOrderService;

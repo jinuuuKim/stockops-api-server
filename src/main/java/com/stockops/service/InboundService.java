@@ -10,6 +10,7 @@ import com.stockops.entity.Location;
 import com.stockops.entity.Lot;
 import com.stockops.entity.LotStatus;
 import com.stockops.entity.Product;
+import com.stockops.entity.WarehouseStatus;
 import com.stockops.exception.InvalidOperationException;
 import com.stockops.exception.ResourceNotFoundException;
 import com.stockops.repository.InboundItemRepository;
@@ -83,6 +84,7 @@ public class InboundService {
 
         final Product product = findProductById(request.productId());
         final Location location = findLocationById(request.locationId());
+        assertLocationWarehouseNotClosed(location.getId());
 
         final InboundItem item = new InboundItem();
         item.setInboundId(inboundId);
@@ -123,6 +125,7 @@ public class InboundService {
         for (InboundItem item : items) {
             findProductById(item.getProductId());
             findLocationById(item.getLocationId());
+            assertLocationWarehouseNotClosed(item.getLocationId());
 
             final Lot lot = lotRepository.findByLotNumberAndProductId(item.getLotNumber(), item.getProductId())
                     .map(existingLot -> updateExistingLot(existingLot, item))
@@ -216,6 +219,14 @@ public class InboundService {
     private void validateDraftStatus(final Inbound inbound) {
         if (!STATUS_DRAFT.equals(inbound.getStatus())) {
             throw new InvalidOperationException("Inbound must be in DRAFT status");
+        }
+    }
+
+    private void assertLocationWarehouseNotClosed(final Long locationId) {
+        final Location location = findLocationById(locationId);
+        if (location.getWarehouse() != null && location.getWarehouse().getStatus() == WarehouseStatus.CLOSED) {
+            throw new InvalidOperationException(
+                    "Inbound not allowed to closed warehouse: " + location.getWarehouse().getName());
         }
     }
 

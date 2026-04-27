@@ -44,4 +44,10 @@ public class Warehouse extends BaseEntity {
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
     private WarehouseStatus status = WarehouseStatus.ACTIVE;
+
+    @Column(name = "closure_reason")
+    private String closureReason;
+
+    @Column(name = "closed_at")
+    private java.time.Instant closedAt;
 }

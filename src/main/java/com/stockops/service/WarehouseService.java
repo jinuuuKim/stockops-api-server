@@ -1,16 +1,29 @@
 package com.stockops.service;
 
 import com.stockops.entity.Center;
+import com.stockops.entity.Inventory;
+import com.stockops.entity.InventoryTransfer;
+import com.stockops.entity.InventoryTransferStatus;
+import com.stockops.entity.Location;
+import com.stockops.entity.Inbound;
+import com.stockops.entity.InboundItem;
 import com.stockops.entity.Warehouse;
 import com.stockops.entity.WarehouseStatus;
 import com.stockops.exception.InvalidOperationException;
 import com.stockops.exception.ResourceNotFoundException;
+import com.stockops.repository.InventoryRepository;
+import com.stockops.repository.InventoryTransferRepository;
+import com.stockops.repository.LocationRepository;
+import com.stockops.repository.InboundRepository;
+import com.stockops.repository.InboundItemRepository;
 import com.stockops.repository.WarehouseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Service for Warehouse management.
@@ -25,6 +38,11 @@ public class WarehouseService {
 
     private final WarehouseRepository warehouseRepository;
     private final CenterService centerService;
+    private final LocationRepository locationRepository;
+    private final InventoryRepository inventoryRepository;
+    private final InboundRepository inboundRepository;
+    private final InboundItemRepository inboundItemRepository;
+    private final InventoryTransferRepository inventoryTransferRepository;
 
     public List<Warehouse> findAll() {
         return warehouseRepository.findAllWithCenter();
@@ -68,5 +86,85 @@ public class WarehouseService {
         Warehouse warehouse = findById(id);
         warehouse.setStatus(WarehouseStatus.CLOSED);
         warehouseRepository.save(warehouse);
+    }
+
+    /**
+     * Checks whether a warehouse can be closed.
+     * Validates that no remaining inventory, open inbound drafts, or open transfers exist
+     * for locations within the warehouse.
+     *
+     * @param warehouseId warehouse identifier
+     * @return true if the warehouse can be closed
+     */
+    @Transactional(readOnly = true)
+    public boolean canClose(Long warehouseId) {
+        Warehouse warehouse = findById(warehouseId);
+        if (warehouse.getStatus() == WarehouseStatus.CLOSED) {
+            return false;
+        }
+
+        List<Long> locationIds = locationRepository.findByWarehouseId(warehouseId)
+                .stream()
+                .map(Location::getId)
+                .toList();
+
+        if (locationIds.isEmpty()) {
+            return true;
+        }
+
+        List<Inventory> inventories = inventoryRepository.findAllByLocationIdIn(locationIds);
+        boolean hasInventory = inventories.stream()
+                .anyMatch(inv -> nullSafeQuantity(inv.getQuantity()) > 0);
+        if (hasInventory) {
+            return false;
+        }
+
+        List<Inbound> draftInbounds = inboundRepository.findByStatus("DRAFT");
+        for (Inbound inbound : draftInbounds) {
+            List<InboundItem> items = inboundItemRepository.findByInboundId(inbound.getId());
+            boolean targetsWarehouse = items.stream()
+                    .anyMatch(item -> locationIds.contains(item.getLocationId()));
+            if (targetsWarehouse) {
+                return false;
+            }
+        }
+
+        for (Long locationId : locationIds) {
+            List<InventoryTransfer> fromTransfers = inventoryTransferRepository.findByFromLocationId(locationId);
+            List<InventoryTransfer> toTransfers = inventoryTransferRepository.findByToLocationId(locationId);
+            boolean hasOpenTransfers = Stream.concat(fromTransfers.stream(), toTransfers.stream())
+                    .anyMatch(t -> t.getStatus() == InventoryTransferStatus.REQUESTED);
+            if (hasOpenTransfers) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Closes a warehouse after validating preconditions.
+     * Sets status to CLOSED and records the closure reason and timestamp.
+     *
+     * @param warehouseId warehouse identifier
+     * @param reason closure reason
+     * @return closed warehouse
+     * @throws ResourceNotFoundException when warehouse does not exist
+     * @throws InvalidOperationException when warehouse cannot be closed
+     */
+    public Warehouse close(Long warehouseId, String reason) {
+        if (!canClose(warehouseId)) {
+            throw new InvalidOperationException(
+                    "Warehouse cannot be closed. Ensure no inventory, open inbounds, or open transfers remain.");
+        }
+        Warehouse warehouse = findById(warehouseId);
+        warehouse.setStatus(WarehouseStatus.CLOSED);
+        warehouse.setClosureReason(reason);
+        warehouse.setClosedAt(Instant.now());
+        return warehouseRepository.save(warehouse);
+    }
+
+    private int nullSafeQuantity(Integer quantity) {
+        return quantity == null ? 0 : quantity;
     }
 }
