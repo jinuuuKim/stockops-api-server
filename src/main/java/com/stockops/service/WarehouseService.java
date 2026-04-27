@@ -1,5 +1,6 @@
 package com.stockops.service;
 
+import com.stockops.dto.WarehouseCanCloseResponse;
 import com.stockops.entity.Center;
 import com.stockops.entity.Inventory;
 import com.stockops.entity.InventoryTransfer;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -162,6 +164,69 @@ public class WarehouseService {
         warehouse.setClosureReason(reason);
         warehouse.setClosedAt(Instant.now());
         return warehouseRepository.save(warehouse);
+    }
+
+    /**
+     * Returns detailed closure preconditions for a warehouse.
+     *
+     * @param warehouseId warehouse identifier
+     * @return response with canClose flag and specific blocking reasons
+     */
+    @Transactional(readOnly = true)
+    public WarehouseCanCloseResponse getCanCloseResponse(Long warehouseId) {
+        Warehouse warehouse = findById(warehouseId);
+        if (warehouse.getStatus() == WarehouseStatus.CLOSED) {
+            List<String> reasons = List.of("이미 폐쇄된 창고입니다.");
+            return new WarehouseCanCloseResponse(false, reasons, 0, 0, 0);
+        }
+
+        List<Long> locationIds = locationRepository.findByWarehouseId(warehouseId)
+                .stream()
+                .map(Location::getId)
+                .toList();
+
+        int remainingInventory = 0;
+        int openInbounds = 0;
+        int openTransfers = 0;
+        List<String> reasons = new ArrayList<>();
+
+        if (!locationIds.isEmpty()) {
+            List<Inventory> inventories = inventoryRepository.findAllByLocationIdIn(locationIds);
+            remainingInventory = (int) inventories.stream()
+                    .filter(inv -> nullSafeQuantity(inv.getQuantity()) > 0)
+                    .count();
+            if (remainingInventory > 0) {
+                reasons.add("남은 재고: " + remainingInventory + "개");
+            }
+
+            List<Inbound> draftInbounds = inboundRepository.findByStatus("DRAFT");
+            for (Inbound inbound : draftInbounds) {
+                List<InboundItem> items = inboundItemRepository.findByInboundId(inbound.getId());
+                boolean targetsWarehouse = items.stream()
+                        .anyMatch(item -> locationIds.contains(item.getLocationId()));
+                if (targetsWarehouse) {
+                    openInbounds++;
+                }
+            }
+            if (openInbounds > 0) {
+                reasons.add("진행 중 입고: " + openInbounds + "건");
+            }
+
+            for (Long locationId : locationIds) {
+                List<InventoryTransfer> fromTransfers = inventoryTransferRepository.findByFromLocationId(locationId);
+                List<InventoryTransfer> toTransfers = inventoryTransferRepository.findByToLocationId(locationId);
+                long count = Stream.concat(fromTransfers.stream(), toTransfers.stream())
+                        .filter(t -> t.getStatus() == InventoryTransferStatus.REQUESTED)
+                        .count();
+                openTransfers += (int) count;
+            }
+            if (openTransfers > 0) {
+                reasons.add("진행 중 이동: " + openTransfers + "건");
+            }
+        }
+
+        boolean canClose = reasons.isEmpty();
+        return new WarehouseCanCloseResponse(canClose, reasons, remainingInventory, openInbounds, openTransfers);
     }
 
     private int nullSafeQuantity(Integer quantity) {
