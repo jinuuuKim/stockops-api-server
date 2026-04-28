@@ -1,3 +1,4 @@
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/PendingAlert.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/Location.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/DemandForecastRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/EscalationRule.java
@@ -24,6 +25,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/entity/PurchaseOrderShipmentItem.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/analytics/AnalyticsDemandHistoryRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/EscalationPolicyDTO.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/EscalationDispatcher.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/Notification.java
 /workspace/stockops/backend/src/main/java/com/stockops/dto/ExcelImportRowError.java
 /workspace/stockops/backend/src/main/java/com/stockops/dto/SensorDeviceResponse.java
@@ -37,6 +39,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/repository/InventoryTransactionRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/AuditLogController.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/NotificationController.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/PendingAlertStatus.java
 /workspace/stockops/backend/src/main/java/com/stockops/service/analytics/AnalyticsAggregationScheduler.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/StockAdjustmentRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/integration/sensimul/ControllerCreateRequest.java
@@ -67,6 +70,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/dto/UserDTO.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/PurchaseOrderShipmentRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/PurchaseOrderStatus.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/EscalationScheduler.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/AnalyticsController.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/ProductRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/ExpiryAlertController.java
@@ -192,6 +196,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/repository/analytics/AnalyticsExpiryWasteRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/integration/sensimul/ParsedSensorTopic.java
 /workspace/stockops/backend/src/main/java/com/stockops/ai/forecast/StatisticalForecastModel.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/PendingAlertService.java
 /workspace/stockops/backend/src/main/java/com/stockops/service/AnalyticsExcelExportService.java
 /workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/EscalationController.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/OutboundItem.java
@@ -202,6 +207,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/controller/CenterInventoryController.java
 /workspace/stockops/backend/src/main/java/com/stockops/dto/analytics/ExpiryWasteReportResponse.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/InventoryController.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/PendingAlertRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/StockAdjustmentController.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/NoticeType.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/ExcelController.java
@@ -219,6 +225,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/auth/AuthDataLoader.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/InventoryTransferRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/Inbound.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/PendingAlertDTO.java
 /workspace/stockops/backend/src/main/java/com/stockops/repository/CycleCountRepository.java
 /workspace/stockops/backend/src/main/java/com/stockops/exception/GlobalExceptionHandler.java
 /workspace/stockops/backend/src/main/java/com/stockops/service/analytics/AnalyticsAggregationProperties.java
@@ -302,6 +309,7 @@
 /workspace/stockops/backend/src/main/java/com/stockops/dto/RoleDTO.java
 /workspace/stockops/backend/src/main/java/com/stockops/dto/StockAdjustmentDTO.java
 /workspace/stockops/backend/src/main/java/com/stockops/notification/sms/SmsSendHistory.java
+/workspace/stockops/backend/src/main/java/com/stockops/notification/escalation/PendingAlertController.java
 /workspace/stockops/backend/src/main/java/com/stockops/dto/RoleRequest.java
 /workspace/stockops/backend/src/main/java/com/stockops/controller/EnvironmentQueryController.java
 /workspace/stockops/backend/src/main/java/com/stockops/entity/InventoryTransfer.java
