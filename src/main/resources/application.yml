@@ -43,6 +43,8 @@ webhook:
     url: ${WEBHOOK_TEAMS_URL:}
 
 stockops:
+  cors:
+    allowed-origins: ${STOCKOPS_CORS_ALLOWED_ORIGINS:http://localhost:5173}
   sensimul:
     base-url: ${STOCKOPS_SENSIMUL_BASE_URL:http://localhost:18080}
     connect-timeout: 5s
@@ -83,6 +85,10 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password: ""
+
+stockops:
+  ratelimit:
+    enabled: false
 
 ---
 spring:

@@ -17,6 +17,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+
+import java.util.Optional;
 
 /**
  * Spring Security configuration for JWT-protected APIs.
@@ -33,6 +36,7 @@ public class SecurityConfig {
 
     /**
      * Builds the HTTP security filter chain.
+     * Adds XSS-prevention and hardening headers alongside JWT authentication.
      *
      * @param http Spring Security HTTP builder
      * @param jwtAuthenticationFilter JWT authentication filter
@@ -41,13 +45,24 @@ public class SecurityConfig {
      */
     @Bean
     public SecurityFilterChain filterChain(final HttpSecurity http,
-                                           final JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
+                                           final JwtAuthenticationFilter jwtAuthenticationFilter,
+                                           final Optional<RateLimitFilter> rateLimitFilter) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.configure(http))
+                .headers(headers -> headers
+                        .contentTypeOptions(contentTypeOptions -> {})
+                        .frameOptions(frameOptions -> frameOptions.deny())
+                        .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'"))
+                        .xssProtection(xss -> xss.disable())
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31536000))
+                        .referrerPolicy(referrer -> referrer
+                                .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                         .accessDeniedHandler((request, response, accessDeniedException) ->
@@ -59,6 +74,8 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+        rateLimitFilter.ifPresent(filter -> http.addFilterAfter(filter, JwtAuthenticationFilter.class));
 
         return http.build();
     }
