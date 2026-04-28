@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockOps 주간 보고서</title>
+    <style>
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; padding: 24px; text-align: center; }
+        .header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+        .header p { margin: 8px 0 0; opacity: 0.9; font-size: 14px; }
+        .content { padding: 24px; }
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+        .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; }
+        .summary-card h3 { margin: 0 0 8px; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600; }
+        .summary-card .value { font-size: 28px; font-weight: 700; color: #1e293b; }
+        .summary-card .change { font-size: 12px; margin-top: 4px; }
+        .change.positive { color: #16a34a; }
+        .change.negative { color: #dc2626; }
+        .period { text-align: center; color: #64748b; font-size: 14px; margin-bottom: 24px; padding: 12px; background: #f8fafc; border-radius: 6px; }
+        .section-title { color: #1e293b; font-size: 16px; font-weight: 600; margin: 0 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600; padding: 12px 16px; text-align: left; }
+        td { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1e293b; }
+        tr:last-child td { border-bottom: none; }
+        .footer { background: #f8fafc; padding: 16px 24px; text-align: center; color: #64748b; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>StockOps 주간 보고서</h1>
+            <p th:text="${centerName}">강남센터</p>
+        </div>
+        <div class="content">
+            <div class="period">
+                <strong>보고 기간:</strong> <span th:text="${periodStart}">2024-01-01</span> ~ <span th:text="${periodEnd}">2024-01-07</span>
+            </div>
+
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <h3>입고</h3>
+                    <div class="value" th:text="${totalInbound}">1,234</div>
+                    <div class="change positive" th:if="${inboundChangePercent >= 0}">
+                        ▲ <span th:text="${#numbers.formatDecimal(inboundChangePercent, 1, 1)}">5.2</span>% 전주 대비
+                    </div>
+                    <div class="change negative" th:if="${inboundChangePercent < 0}">
+                        ▼ <span th:text="${#numbers.formatDecimal(inboundChangePercent, 1, 1)}">-2.1</span>% 전주 대비
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <h3>출고</h3>
+                    <div class="value" th:text="${totalOutbound}">987</div>
+                    <div class="change positive" th:if="${outboundChangePercent >= 0}">
+                        ▲ <span th:text="${#numbers.formatDecimal(outboundChangePercent, 1, 1)}">3.8</span>% 전주 대비
+                    </div>
+                    <div class="change negative" th:if="${outboundChangePercent < 0}">
+                        ▼ <span th:text="${#numbers.formatDecimal(outboundChangePercent, 1, 1)}">-1.5</span>% 전주 대비
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section-title">📦 주요 상품 현황</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>상품명</th>
+                        <th style="text-align: right;">수량</th>
+                        <th>단위</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="product : ${topProducts}">
+                        <td th:text="${product.productName}">상품명</td>
+                        <td style="text-align: right;" th:text="${#numbers.formatInteger(product.totalQuantity, 0, 'COMMA')}">1,000</td>
+                        <td th:text="${product.unit}">개</td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(topProducts)}">
+                        <td colspan="3" style="text-align: center; color: #94a3b8;">해당 기간 데이터가 없습니다.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="footer">
+            StockOps 스마트 재고 관리 시스템<br>
+            생성 일시: <span th:text="${generatedAt}">2024-01-08 09:00</span>
+        </div>
+    </div>
+</body>
+</html>

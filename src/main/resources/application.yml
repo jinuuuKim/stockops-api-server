@@ -32,6 +32,16 @@ jwt:
   secret: ${JWT_SECRET:StockOpsSecretKeyForJWTTokenGenerationMustBeLongEnough2024}
   expiration: 86400000
 
+webhook:
+  slack:
+    url: ${WEBHOOK_SLACK_URL:}
+  notion:
+    url: ${WEBHOOK_NOTION_URL:}
+  discord:
+    url: ${WEBHOOK_DISCORD_URL:}
+  teams:
+    url: ${WEBHOOK_TEAMS_URL:}
+
 stockops:
   sensimul:
     base-url: ${STOCKOPS_SENSIMUL_BASE_URL:http://localhost:18080}

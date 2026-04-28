@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StockOps 알림</title>
+    <style>
+        body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; background-color: #f4f6f8; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { padding: 24px; text-align: center; }
+        .header.info { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .header.warning { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .header.critical { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .severity-badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: white; }
+        .severity-badge.info { background: rgba(255,255,255,0.2); }
+        .severity-badge.warning { background: rgba(255,255,255,0.3); }
+        .severity-badge.critical { background: rgba(255,255,255,0.3); }
+        .header h1 { margin: 16px 0 0; color: white; font-size: 20px; font-weight: 600; }
+        .content { padding: 24px; }
+        .alert-message { background: #f8fafc; border-left: 4px solid #64748b; padding: 16px; border-radius: 0 8px 8px 0; margin-bottom: 24px; }
+        .alert-message p { margin: 0; color: #1e293b; font-size: 15px; line-height: 1.6; }
+        .timestamp { color: #64748b; font-size: 13px; margin-bottom: 24px; display: flex; align-items: center; gap: 6px; }
+        .action-button { display: inline-block; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; margin-top: 16px; }
+        .footer { background: #f8fafc; padding: 16px 24px; text-align: center; color: #64748b; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header" th:classappend="${severity == 'CRITICAL' ? 'critical' : (severity == 'WARNING' ? 'warning' : 'info')}">
+            <span class="severity-badge" th:classappend="${severity == 'CRITICAL' ? 'critical' : (severity == 'WARNING' ? 'warning' : 'info')}" th:text="${severity}">WARNING</span>
+            <h1 th:text="${alertSubject}">재고 부족 알림</h1>
+        </div>
+        <div class="content">
+            <div class="timestamp">
+                <span>🕐</span>
+                <span th:text="${timestamp}">2024-01-08 14:30:00</span>
+            </div>
+            <div class="alert-message">
+                <p th:text="${alertMessage}">강남 1창고의 상품 A가 안전재고 이하로 떨어졌습니다. 현재 수량: 50개</p>
+            </div>
+            <div style="text-align: center;">
+                <a href="#" class="action-button">대시보드 바로가기 →</a>
+            </div>
+        </div>
+        <div class="footer">
+            StockOps 스마트 재고 관리 시스템<br>
+            이 알림은 자동으로 생성되었습니다.
+        </div>
+    </div>
+</body>
+</html>
