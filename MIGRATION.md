@@ -8,7 +8,7 @@ on 2026-05-11 using `git filter-branch`.
 ## What Changed
 
 - Extracted `backend/` directory to repository root
-- Preserved all git history (67 commits)
+- Preserved all git history (68 commits)
 - Added standalone `.gitignore`, `.env.example`, and CI/CD configuration
 - Removed Pi-specific `application-pi.yml`
 - Secrets are now environment variables (no hardcoded values)
