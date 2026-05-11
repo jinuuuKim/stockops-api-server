@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "stockops.mqtt-ingestion")
 public class MqttIngestionProperties {
 
-    private String brokerUrl = "tcp://192.168.0.11:1883";
+    private String brokerUrl = "tcp://localhost:1883";
     private int qos = 1;
     private String clientId;
     private boolean enabled = true;

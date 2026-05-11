@@ -55,7 +55,7 @@ stockops:
     enabled: true
   mqtt-ingestion:
     enabled: ${STOCKOPS_MQTT_INGESTION_ENABLED:true}
-    broker-url: ${STOCKOPS_MQTT_INGESTION_BROKER_URL:tcp://192.168.0.11:1883}
+    broker-url: ${STOCKOPS_MQTT_INGESTION_BROKER_URL:tcp://localhost:1883}
     qos: ${STOCKOPS_MQTT_INGESTION_QOS:1}
     client-id: ${STOCKOPS_MQTT_INGESTION_CLIENT_ID:}
   analytics:
