@@ -5,6 +5,7 @@ WORKDIR /workspace
 COPY pom.xml ./
 RUN mvn -q -DskipTests dependency:go-offline
 
+ARG APP_SOURCE_HASH=20260512-1
 COPY src ./src
 RUN mvn -q -DskipTests package
 
