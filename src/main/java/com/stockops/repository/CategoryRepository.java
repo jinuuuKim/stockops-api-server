@@ -26,6 +26,10 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
     @Query("SELECT c FROM Category c WHERE c.parent IS NULL AND c.active = true ORDER BY c.sortOrder")
     List<Category> findByParentIdIsNullAndActiveTrue();
 
+    List<Category> findAllByActiveTrueOrderBySortOrderAsc();
+
+    List<Category> findByParentIsNullAndActiveTrueOrderBySortOrderAsc();
+
     /**
      * Find children of a specific parent category.
      *
@@ -34,6 +38,8 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
      */
     @Query("SELECT c FROM Category c WHERE c.parent.id = :parentId AND c.active = true ORDER BY c.sortOrder")
     List<Category> findByParentIdAndActiveTrue(@Param("parentId") Long parentId);
+
+    List<Category> findByParentIdAndActiveTrueOrderBySortOrderAsc(Long parentId);
 
     /**
      * Find categories by level.
@@ -51,6 +57,11 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
      * @return true if code exists
      */
     boolean existsByCode(String code);
+
+    boolean existsByCodeAndIdNot(String code, Long id);
+
+    @Query("SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END FROM Category c WHERE c.parent.id = :parentId")
+    boolean existsByParentId(@Param("parentId") Long parentId);
 
     /**
      * Find category by code.

@@ -149,6 +149,7 @@ public class ExcelImportService {
                         requireText(getTrimmedString(row, 1, dataFormatter), "name"),
                         nullableText(getTrimmedString(row, 2, dataFormatter)),
                         nullableText(getTrimmedString(row, 3, dataFormatter)),
+                        null,
                         requireText(getTrimmedString(row, 4, dataFormatter), "unit"),
                         parseBoolean(row, 5, dataFormatter, "expiryManaged"),
                         parseBigDecimal(row, 6, dataFormatter, "defaultPrice", false),

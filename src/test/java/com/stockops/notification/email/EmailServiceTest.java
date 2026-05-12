@@ -2,6 +2,7 @@ package com.stockops.notification.email;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,7 +51,7 @@ class EmailServiceTest {
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
         when(templateEngine.process(anyString(), any(Context.class))).thenReturn("<html>Alert</html>");
 
-        emailService.sendAlert("admin@example.com", "High Temperature", "Warehouse 1: 35C detected");
+        emailService.sendAlert("admin@example.com", "High Temperature", "Warehouse 1: 35C detected", "WARNING");
 
         verify(mailSender).send(mimeMessage);
     }

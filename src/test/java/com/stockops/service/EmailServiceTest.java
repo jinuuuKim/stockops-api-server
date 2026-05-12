@@ -1,6 +1,6 @@
 package com.stockops.service;
 
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
@@ -30,7 +30,8 @@ class EmailServiceTest {
 
     @Test
     void sendWeeklyReportInMockMode() {
-        when(templateEngine.process(any(), any(Context.class))).thenReturn("<html>report</html>");
+        when(templateEngine.process(anyString(), org.mockito.ArgumentMatchers.any(Context.class)))
+                .thenReturn("<html>report</html>");
 
         final EmailService.WeeklyReportData data = new EmailService.WeeklyReportData(
                 "Test Center", "2026-04-21", "2026-04-27",
@@ -43,7 +44,8 @@ class EmailServiceTest {
 
     @Test
     void sendAlertInMockMode() {
-        when(templateEngine.process(any(), any(Context.class))).thenReturn("<html>alert</html>");
+        when(templateEngine.process(anyString(), org.mockito.ArgumentMatchers.any(Context.class)))
+                .thenReturn("<html>alert</html>");
 
         emailService.sendAlert("test@example.com", "Temperature Alert", "High temp", "CRITICAL");
     }

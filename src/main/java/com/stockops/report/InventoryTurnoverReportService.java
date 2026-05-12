@@ -58,8 +58,8 @@ public class InventoryTurnoverReportService {
      * @return list of turnover DTOs sorted by turnoverRate descending
      */
     public List<InventoryTurnoverDTO> generateReport(LocalDate startDate, LocalDate endDate) {
-        Instant startInstant = startDate.atStartOfDay(ZoneOffset.UTC);
-        Instant endInstant = endDate.plusDays(1).atStartOfDay(ZoneOffset.UTC);
+        Instant startInstant = startDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant endInstant = endDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         int periodDays = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
 
         List<Product> products = productRepository.findAll();
@@ -85,8 +85,8 @@ public class InventoryTurnoverReportService {
      * @return list of turnover DTOs sorted by turnoverRate descending
      */
     public List<InventoryTurnoverDTO> generateReport(LocalDate startDate, LocalDate endDate, Long centerId) {
-        Instant startInstant = startDate.atStartOfDay(ZoneOffset.UTC);
-        Instant endInstant = endDate.plusDays(1).atStartOfDay(ZoneOffset.UTC);
+        Instant startInstant = startDate.atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant endInstant = endDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         int periodDays = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
 
         List<Warehouse> warehouses = warehouseRepository.findByCenterId(centerId);

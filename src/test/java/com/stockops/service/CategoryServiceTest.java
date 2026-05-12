@@ -18,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class CategoryServiceTest {
@@ -35,7 +36,7 @@ class CategoryServiceTest {
     void createCategorySucceeds() {
         final CategoryRequestDTO request = new CategoryRequestDTO("Test", "TEST", null, 1, 0, true);
         final Category saved = new Category("Test", "TEST", 1);
-        saved.setId(1L);
+        ReflectionTestUtils.setField(saved, "id", 1L);
         saved.setActive(true);
         saved.setSortOrder(0);
 
@@ -62,7 +63,7 @@ class CategoryServiceTest {
     @Test
     void deleteCategoryThrowsWhenProductsExist() {
         final Category category = new Category("Test", "TEST", 1);
-        category.setId(1L);
+        ReflectionTestUtils.setField(category, "id", 1L);
         category.setActive(true);
 
         when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));

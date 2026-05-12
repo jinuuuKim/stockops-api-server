@@ -1,3 +1,5 @@
+CREATE SCHEMA IF NOT EXISTS analytics;
+
 INSERT INTO permissions (code, description) VALUES
 ('AI_RECOMMENDATION_READ', 'Read deterministic AI reorder recommendations'),
 ('AI_RECOMMENDATION_APPROVE', 'Approve AI reorder recommendations into draft purchase orders')

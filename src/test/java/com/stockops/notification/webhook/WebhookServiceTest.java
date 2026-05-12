@@ -23,7 +23,7 @@ class WebhookServiceTest {
 
     @Test
     void sendLogsWhenUrlIsBlank() {
-        final WebhookPayload payload = new WebhookPayload("Test", "Test content", "info");
+        final WebhookPayload payload = testPayload();
 
         // Should not throw, just log
         webhookService.send("SLACK", "", payload);
@@ -33,8 +33,8 @@ class WebhookServiceTest {
 
     @Test
     void sendDelegatesToProvider() {
-        final WebhookPayload payload = new WebhookPayload("Test", "Test content", "info");
-        final WebhookProvider provider = new TestWebhookProvider();
+        final WebhookPayload payload = testPayload();
+        final TestWebhookProvider provider = new TestWebhookProvider();
 
         when(registry.getProvider("SLACK")).thenReturn(Optional.of(provider));
 
@@ -46,8 +46,8 @@ class WebhookServiceTest {
 
     @Test
     void sendWithHeadersDelegatesToProvider() {
-        final WebhookPayload payload = new WebhookPayload("Test", "Test content", "info");
-        final WebhookProvider provider = new TestWebhookProvider();
+        final WebhookPayload payload = testPayload();
+        final TestWebhookProvider provider = new TestWebhookProvider();
         final Map<String, String> headers = Map.of("Authorization", "Bearer token");
 
         when(registry.getProvider("DISCORD")).thenReturn(Optional.of(provider));
@@ -59,7 +59,7 @@ class WebhookServiceTest {
 
     @Test
     void sendLogsWhenProviderNotFound() {
-        final WebhookPayload payload = new WebhookPayload("Test", "Test content", "info");
+        final WebhookPayload payload = testPayload();
 
         when(registry.getProvider("UNKNOWN")).thenReturn(Optional.empty());
 
@@ -67,15 +67,25 @@ class WebhookServiceTest {
         webhookService.send("UNKNOWN", "https://example.com/webhook", payload);
     }
 
-    /**
-     * Simple test provider that tracks whether it was called.
-     */
+    private WebhookPayload testPayload() {
+        return WebhookPayload.builder()
+                .eventType("Test")
+                .message("Test content")
+                .severity(WebhookPayload.Severity.INFO)
+                .build();
+    }
+
     private static class TestWebhookProvider implements WebhookProvider {
         private boolean called = false;
 
         @Override
-        public String getType() {
+        public String getProviderType() {
             return "TEST";
+        }
+
+        @Override
+        public void send(String url, WebhookPayload payload) {
+            this.called = true;
         }
 
         @Override

@@ -38,8 +38,8 @@ public class TwilioSmsGateway implements SmsGateway {
 
     public TwilioSmsGateway(final RestTemplateBuilder restTemplateBuilder, final SmsConfig smsConfig) {
         this.restTemplate = restTemplateBuilder
-                .connectTimeout(Duration.ofSeconds(10))
-                .readTimeout(Duration.ofSeconds(10))
+                .setConnectTimeout(Duration.ofSeconds(10))
+                .setReadTimeout(Duration.ofSeconds(10))
                 .build();
         this.smsConfig = smsConfig;
     }
