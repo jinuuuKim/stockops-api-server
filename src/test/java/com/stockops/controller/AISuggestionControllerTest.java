@@ -17,6 +17,7 @@ import com.stockops.dto.ai.AISuggestionRejectRequest;
 import com.stockops.entity.User;
 import com.stockops.entity.ai.AISuggestion;
 import com.stockops.entity.ai.AISuggestionStatus;
+import com.stockops.exception.ConflictException;
 import com.stockops.security.CustomUserDetailsService;
 import com.stockops.security.PermissionChecker;
 import com.stockops.security.JwtTokenProvider;
@@ -269,6 +270,23 @@ class AISuggestionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("EXECUTED"))
                 .andExpect(jsonPath("$.allowedActions").isEmpty());
+    }
+
+    @Test
+    void executeSuggestionConflictReturns409() throws Exception {
+        stubPermissions(true);
+        stubAuthentication();
+        when(userService.getUserByEmail("ai-admin")).thenReturn(currentUser());
+        when(aiSuggestionService.execute(anyLong(), any(), any(), anyString()))
+                .thenThrow(new ConflictException("AI suggestion was modified by another request"));
+
+        mockMvc.perform(post("/api/v1/ai/suggestions/{id}/execute", 1L)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer test-token")
+                        .header("X-Request-Id", "req-execute-conflict")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new AISuggestionExecuteRequest("{\"ok\":true}"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     @Test
