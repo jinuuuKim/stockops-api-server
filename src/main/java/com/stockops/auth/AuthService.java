@@ -22,7 +22,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuthService {
 
     private static final String TOKEN_TYPE = "Bearer";
-    private static final String BEARER_PREFIX = TOKEN_TYPE + " ";
 
     private final AuthenticationManager authenticationManager;
     private final UserRepository userRepository;
@@ -57,7 +56,7 @@ public class AuthService {
      * @return signed access token response
      * @throws ResponseStatusException when the credentials are invalid
      */
-    public LoginResponse authenticate(final LoginRequest loginRequest) {
+    public AuthResult authenticate(final LoginRequest loginRequest) {
         try {
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword()));
@@ -68,34 +67,36 @@ public class AuthService {
         final User user = userRepository.findByEmail(loginRequest.getEmail())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
 
-        return buildResponse(jwtTokenProvider.generateAccessToken(user), user);
+        return buildResult(user);
     }
 
     /**
-     * Refreshes an access token from the supplied bearer token.
+     * Refreshes an access token from the supplied refresh-cookie token.
      *
-     * @param authorizationHeader Authorization header containing a bearer token
-     * @return newly issued access token response
-     * @throws ResponseStatusException when the header is missing or the token is invalid
+     * @param refreshToken HttpOnly refresh cookie value
+     * @return newly issued access-token response and rotated refresh token
+     * @throws ResponseStatusException when the cookie is missing or the token is invalid
      */
-    public LoginResponse refreshToken(final String authorizationHeader) {
-        final String token = resolveBearerToken(authorizationHeader);
-
-        if (token == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing bearer token");
+    public AuthResult refreshSession(final String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing refresh cookie");
         }
 
         try {
-            final Long userId = jwtTokenProvider.extractUserId(token);
-            final User user = userId == null
-                    ? userRepository.findByEmail(jwtTokenProvider.extractEmail(token))
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"))
-                    : userRepository.findById(userId)
+            final Long userId = jwtTokenProvider.extractRefreshUserId(refreshToken);
+            final User user = userRepository.findById(userId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
-            return buildResponse(jwtTokenProvider.refreshAccessToken(token), user);
+            return buildResult(user);
         } catch (RuntimeException exception) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid JWT token", exception);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid refresh token", exception);
         }
+    }
+
+    private AuthResult buildResult(final User user) {
+        return new AuthResult(
+                buildResponse(jwtTokenProvider.generateAccessToken(user), user),
+                jwtTokenProvider.generateRefreshToken(user),
+                jwtTokenProvider.getRefreshExpiration());
     }
 
     private LoginResponse buildResponse(final String accessToken, final User user) {
@@ -113,11 +114,4 @@ public class AuthService {
                         scopeMetadata));
     }
 
-    private String resolveBearerToken(final String authorizationHeader) {
-        if (authorizationHeader == null || !authorizationHeader.startsWith(BEARER_PREFIX)) {
-            return null;
-        }
-
-        return authorizationHeader.substring(BEARER_PREFIX.length());
-    }
 }

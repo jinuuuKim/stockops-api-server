@@ -29,12 +29,16 @@ public class JwtTokenProvider {
     private static final String ROLE_CLAIM = "role";
     private static final String TOKEN_TYPE_CLAIM = "type";
     private static final String ACCESS_TOKEN_TYPE = "access";
+    private static final String REFRESH_TOKEN_TYPE = "refresh";
 
     @Value("${jwt.secret}")
     private String secret;
 
     @Value("${jwt.expiration}")
     private long expiration;
+
+    @Value("${jwt.refresh-expiration:604800000}")
+    private long refreshExpiration;
 
     private SecretKey signingKey;
 
@@ -64,18 +68,11 @@ public class JwtTokenProvider {
      * @return signed access token
      */
     public String generateAccessToken(final User user) {
-        final Instant now = Instant.now();
-        final Instant expiresAt = now.plusMillis(expiration);
+        return generateToken(user, ACCESS_TOKEN_TYPE, expiration);
+    }
 
-        return Jwts.builder()
-                .subject(user.getEmail())
-                .claim(USER_ID_CLAIM, user.getId())
-                .claim(ROLE_CLAIM, user.getRole().getName())
-                .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
-                .issuedAt(Date.from(now))
-                .expiration(Date.from(expiresAt))
-                .signWith(signingKey)
-                .compact();
+    public String generateRefreshToken(final User user) {
+        return generateToken(user, REFRESH_TOKEN_TYPE, refreshExpiration);
     }
 
     /**
@@ -144,6 +141,20 @@ public class JwtTokenProvider {
         return userId == null ? null : userId.longValue();
     }
 
+    public Long extractRefreshUserId(final String token) {
+        final Claims claims = extractClaims(token);
+        if (!REFRESH_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
+            throw new JwtException("Unsupported token type");
+        }
+
+        final Number userId = claims.get(USER_ID_CLAIM, Number.class);
+        if (userId == null) {
+            throw new JwtException("Missing user id");
+        }
+
+        return userId.longValue();
+    }
+
     /**
      * Returns the configured token expiration in milliseconds.
      *
@@ -151,6 +162,25 @@ public class JwtTokenProvider {
      */
     public long getExpiration() {
         return expiration;
+    }
+
+    public long getRefreshExpiration() {
+        return refreshExpiration;
+    }
+
+    private String generateToken(final User user, final String tokenType, final long expiresInMillis) {
+        final Instant now = Instant.now();
+        final Instant expiresAt = now.plusMillis(expiresInMillis);
+
+        return Jwts.builder()
+                .subject(user.getEmail())
+                .claim(USER_ID_CLAIM, user.getId())
+                .claim(ROLE_CLAIM, user.getRole().getName())
+                .claim(TOKEN_TYPE_CLAIM, tokenType)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiresAt))
+                .signWith(signingKey)
+                .compact();
     }
 
     private Claims extractClaims(final String token) {
