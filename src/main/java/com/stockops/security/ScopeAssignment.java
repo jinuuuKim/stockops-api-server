@@ -1,9 +1,8 @@
 package com.stockops.security;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Embeddable;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import java.util.Objects;
 
 /**
@@ -15,7 +14,7 @@ import java.util.Objects;
 @Embeddable
 public class ScopeAssignment {
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = ScopeTypeConverter.class)
     @Column(name = "scope_type", nullable = false)
     private ScopeType scope;
 
@@ -31,7 +30,11 @@ public class ScopeAssignment {
      * @return global assignment
      */
     public static ScopeAssignment global() {
-        return new ScopeAssignment(ScopeType.GLOBAL, null, null);
+        return admin();
+    }
+
+    public static ScopeAssignment admin() {
+        return new ScopeAssignment(ScopeType.ADMIN, null, null);
     }
 
     public ScopeType getScope() {
