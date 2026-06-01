@@ -11,6 +11,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(schema = "analytics", name = "ai_suggestions")
@@ -50,6 +52,7 @@ public class AISuggestion extends BaseEntity {
     @Column(name = "target_scope_id", nullable = false)
     private Long targetScopeId;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "payload_json", nullable = false, columnDefinition = "jsonb")
     private String payloadJson = "{}";
 
@@ -80,8 +83,9 @@ public class AISuggestion extends BaseEntity {
     @Column(name = "forecast_generated_at")
     private Instant forecastGeneratedAt;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "forecast_source_payload_json", columnDefinition = "jsonb")
-    private String forecastSourcePayloadJson;
+    private String forecastSourcePayloadJson = "{}";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 50)
@@ -123,8 +127,9 @@ public class AISuggestion extends BaseEntity {
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "execution_result", columnDefinition = "jsonb")
-    private String executionResult;
+    private String executionResult = "{}";
 
     @Version
     @Column(name = "version", nullable = false)

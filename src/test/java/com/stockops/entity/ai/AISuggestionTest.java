@@ -134,4 +134,37 @@ class AISuggestionTest {
         assertThat(reloaded.getRejectionReason()).isEqualTo("duplicate request");
         assertThat(reloaded.getExecutionResult()).contains("purchase_order_id");
     }
+
+    @Test
+    void reviewPayloadJsonbFieldsPersistWithDefaults() {
+        final AISuggestion suggestion = new AISuggestion();
+        suggestion.setType("INVENTORY_REPLENISHMENT");
+        suggestion.setSeverity("HIGH");
+        suggestion.setTitle("Codex QA create debug");
+        suggestion.setSummary("QA test suggestion");
+        suggestion.setReason("Debug creation");
+        suggestion.setRecommendedAction("No business write");
+        suggestion.setTargetType("PRODUCT");
+        suggestion.setTargetId(1L);
+        suggestion.setTargetScopeType("CENTER");
+        suggestion.setTargetScopeId(1L);
+        suggestion.setPayloadJson("{\"qa\":true}");
+        suggestion.setConfidenceScore(0.87D);
+        suggestion.setSource("QA");
+        suggestion.setSourceType("USER_REQUEST");
+        suggestion.setCreatedFromApp("admin-web");
+        suggestion.setVisibleToApp("ADMIN_WEB");
+        suggestion.setApprovalMode("MANUAL");
+        suggestion.setRequestedScopeType("CENTER");
+        suggestion.setRequestedScopeId(1L);
+
+        final AISuggestion saved = aiSuggestionRepository.save(suggestion);
+        entityManager.flush();
+        entityManager.clear();
+
+        final AISuggestion reloaded = aiSuggestionRepository.findById(saved.getId()).orElseThrow();
+        assertThat(reloaded.getPayloadJson()).contains("qa");
+        assertThat(reloaded.getForecastSourcePayloadJson()).isEqualTo("{}");
+        assertThat(reloaded.getExecutionResult()).isEqualTo("{}");
+    }
 }
