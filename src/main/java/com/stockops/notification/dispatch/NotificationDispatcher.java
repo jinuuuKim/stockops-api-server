@@ -42,7 +42,7 @@ public class NotificationDispatcher {
 
     private final NotificationChannelConfigService channelConfigService;
     private final SmsService smsService;
-    private final EmailService emailService;
+    private final Optional<EmailService> emailService;
     private final WebhookService webhookService;
     private final WebhookEndpointConfigRepository webhookEndpointConfigRepository;
 
@@ -143,7 +143,11 @@ public class NotificationDispatcher {
         String message = formatMessage(alert, rule);
         for (String email : emailAddresses) {
             try {
-                emailService.sendAlert(email, subject, message, alert.getSeverity());
+                if (emailService.isEmpty()) {
+                    log.warn("[DISPATCH] EmailService is not available; skipping email dispatch to {}", email);
+                    continue;
+                }
+                emailService.get().sendAlert(email, subject, message, alert.getSeverity());
                 log.info("[DISPATCH] Email sent to {}", email);
             } catch (Exception e) {
                 log.error("[DISPATCH] Failed to send email to {}: {}", email, e.getMessage(), e);
@@ -214,7 +218,7 @@ public class NotificationDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationDispatcher.class);
 
-    public NotificationDispatcher(final NotificationChannelConfigService channelConfigService, final SmsService smsService, final EmailService emailService, final WebhookService webhookService, final WebhookEndpointConfigRepository webhookEndpointConfigRepository) {
+    public NotificationDispatcher(final NotificationChannelConfigService channelConfigService, final SmsService smsService, final Optional<EmailService> emailService, final WebhookService webhookService, final WebhookEndpointConfigRepository webhookEndpointConfigRepository) {
         this.channelConfigService = channelConfigService;
         this.smsService = smsService;
         this.emailService = emailService;
