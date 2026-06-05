@@ -185,10 +185,10 @@ public class NotificationChannelConfigService {
 
         try {
             webhookService.send(providerType, endpoint.getWebhookUrl(), testPayload);
-            return new WebhookTestResult(true, "Test webhook sent successfully to " + endpoint.getWebhookUrl(), providerType);
+            return new WebhookTestResult(true, "Test webhook sent successfully to masked endpoint", providerType);
         } catch (Exception e) {
             log.error("Webhook test failed for configId={}: {}", configId, e.getMessage(), e);
-            return new WebhookTestResult(false, "Webhook test failed: " + e.getMessage(), providerType);
+            return new WebhookTestResult(false, "Webhook test failed for provider: " + providerType, providerType);
         }
     }
 

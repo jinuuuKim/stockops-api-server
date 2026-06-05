@@ -2,6 +2,9 @@ package com.stockops.controller;
 
 import com.stockops.dto.AuditLogDTO;
 import com.stockops.service.AuditLogService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,14 +42,15 @@ public class AuditLogController {
      */
     @GetMapping
     @PreAuthorize("@permissionChecker.hasPermission('AUDIT_LOG_READ')")
-    public ResponseEntity<List<AuditLogDTO>> getAuditLogs(
+    public ResponseEntity<Page<AuditLogDTO>> getAuditLogs(
             @RequestParam(required = false) final String entityType,
             @RequestParam(required = false) final Long entityId,
             @RequestParam(required = false) final Long userId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) final Instant startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) final Instant endDate) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) final Instant endDate,
+            @PageableDefault(size = 20) final Pageable pageable) {
 
-        return ResponseEntity.ok(auditLogService.searchAuditLogs(entityType, entityId, userId, startDate, endDate));
+        return ResponseEntity.ok(auditLogService.searchAuditLogs(entityType, entityId, userId, startDate, endDate, pageable));
     }
 
     /**

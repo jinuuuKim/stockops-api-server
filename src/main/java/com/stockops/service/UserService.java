@@ -10,6 +10,8 @@ import com.stockops.exception.ResourceNotFoundException;
 import com.stockops.repository.RoleRepository;
 import com.stockops.repository.UserRepository;
 import com.stockops.security.ScopeAccessService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,6 +91,11 @@ public class UserService {
     @Transactional(readOnly = true)
     public List<UserDTO> getAllUsers() {
         return userRepository.findAll().stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<UserDTO> getAllUsers(final Pageable pageable) {
+        return userRepository.findAll(pageable).map(this::toDto);
     }
 
     /**

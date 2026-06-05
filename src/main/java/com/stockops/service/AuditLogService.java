@@ -6,6 +6,7 @@ import com.stockops.entity.User;
 import com.stockops.repository.AuditLogRepository;
 import com.stockops.repository.UserRepository;
 import jakarta.persistence.criteria.Predicate;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -97,16 +98,31 @@ public class AuditLogService {
      */
     @Transactional(readOnly = true)
     public List<AuditLogDTO> searchAuditLogs(final String entityType,
+                                              final Long entityId,
+                                              final Long userId,
+                                              final Instant start,
+                                              final Instant end) {
+        return searchAuditLogs(entityType, entityId, userId, start, end,
+                        PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "performedAt", "id")))
+                .stream()
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditLogDTO> searchAuditLogs(final String entityType,
                                              final Long entityId,
                                              final Long userId,
                                              final Instant start,
-                                             final Instant end) {
+                                             final Instant end,
+                                             final Pageable pageable) {
+        final Pageable effectivePageable = pageable.getSort().isSorted()
+                ? pageable
+                : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                        Sort.by(Sort.Direction.DESC, "performedAt", "id"));
         return auditLogRepository.findAll(
                         auditLogSpecification(entityType, entityId, userId, start, end),
-                        Sort.by(Sort.Direction.DESC, "performedAt", "id"))
-                .stream()
-                .map(this::toDto)
-                .toList();
+                        effectivePageable)
+                .map(this::toDto);
     }
 
     private Specification<AuditLog> auditLogSpecification(final String entityType,

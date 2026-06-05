@@ -1,5 +1,6 @@
 package com.stockops.service;
 
+import com.stockops.dto.NoticeRequest;
 import com.stockops.entity.Notice;
 import com.stockops.entity.NoticeType;
 import com.stockops.exception.ResourceNotFoundException;
@@ -13,42 +14,59 @@ public class NoticeService {
 
     private final NoticeRepository noticeRepository;
 
+    @Transactional(readOnly = true)
     public List<Notice> getActiveNotices() {
         return noticeRepository.findByActiveTrueOrderByCreatedAtDesc();
     }
 
+    @Transactional(readOnly = true)
     public List<Notice> getNoticesByType(NoticeType type) {
         return noticeRepository.findByActiveTrueAndTypeOrderByCreatedAtDesc(type);
     }
 
-    public Notice createNotice(String title, String content, NoticeType type, Long createdBy) {
+    @Transactional
+    public Notice createNotice(final NoticeRequest request) {
         Notice notice = new Notice();
-        notice.setTitle(title);
-        notice.setContent(content);
-        notice.setType(type != null ? type : NoticeType.SYSTEM);
-        notice.setCreatedBy(createdBy);
-        notice.setActive(true);
+        notice.setTitle(request.title());
+        notice.setContent(request.content());
+        notice.setType(request.type() != null ? request.type() : NoticeType.SYSTEM);
+        notice.setCreatedBy(request.createdBy());
+        notice.setActive(request.active() != null ? request.active() : true);
+        notice.setNoticeAt(request.noticeAt());
         return noticeRepository.save(notice);
     }
 
-    public Notice updateNotice(Long id, String title, String content, NoticeType type, Boolean active) {
+    @Transactional
+    public Notice updateNotice(final Long id, final NoticeRequest request) {
         Notice notice = noticeRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Notice not found: " + id));
-        if (title != null) notice.setTitle(title);
-        if (content != null) notice.setContent(content);
-        if (type != null) notice.setType(type);
-        if (active != null) notice.setActive(active);
+        if (request.title() != null && !request.title().isBlank()) notice.setTitle(request.title());
+        if (request.content() != null) notice.setContent(request.content());
+        if (request.type() != null) notice.setType(request.type());
+        if (request.active() != null) notice.setActive(request.active());
+        if (request.noticeAt() != null) notice.setNoticeAt(request.noticeAt());
         return noticeRepository.save(notice);
     }
 
-    public void deleteNotice(Long id) {
+    @Transactional
+    public void deleteNotice(final Long id) {
         Notice notice = noticeRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Notice not found: " + id));
         noticeRepository.delete(notice);
     }
 
-    public List<Notice> getAllNotices() {
-        return noticeRepository.findAll();
+    @Transactional(readOnly = true)
+    public List<Notice> getAllNotices(final NoticeType type, final Boolean active) {
+        if (type != null && active != null) {
+            return noticeRepository.findByTypeAndActiveOrderByCreatedAtDesc(type, active);
+        }
+        if (type != null) {
+            return noticeRepository.findByTypeOrderByCreatedAtDesc(type);
+        }
+        if (active != null) {
+            return noticeRepository.findByActiveOrderByCreatedAtDesc(active);
+        }
+        return noticeRepository.findAllByOrderByCreatedAtDesc();
     }
 
     public NoticeService(final NoticeRepository noticeRepository) {

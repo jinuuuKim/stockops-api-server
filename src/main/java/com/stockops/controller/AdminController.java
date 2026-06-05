@@ -1,5 +1,6 @@
 package com.stockops.controller;
 
+import com.stockops.dto.AdminStatsDTO;
 import com.stockops.repository.ProductRepository;
 import com.stockops.repository.PurchaseOrderRepository;
 import com.stockops.repository.UserRepository;
@@ -20,18 +21,13 @@ public class AdminController {
 
     @GetMapping("/stats")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> getStats() {
+    public ResponseEntity<AdminStatsDTO> getStats() {
         long totalUsers = userRepository.count();
         long totalProducts = productRepository.count();
         long totalOrders = purchaseOrderRepository.count();
         long lowStockCount = inventoryRepository.countLowStockItems(10);
 
-        return ResponseEntity.ok(Map.of(
-            "totalUsers", totalUsers,
-            "totalProducts", totalProducts,
-            "totalOrders", totalOrders,
-            "lowStockCount", lowStockCount
-        ));
+        return ResponseEntity.ok(new AdminStatsDTO(totalUsers, totalProducts, totalOrders, lowStockCount));
     }
 
     @GetMapping("/menus")
