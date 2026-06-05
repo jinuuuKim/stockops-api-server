@@ -166,6 +166,28 @@ class NotificationChannelConfigControllerTest {
                 .andExpect(jsonPath("$.channels").isArray());
     }
 
+    @Test
+    void createTeamsConfigPersistsWebhookEndpointWithoutEchoingUrl() throws Exception {
+        stubPermissions();
+        String teamsWebhookUrl = "https://contoso.webhook.office.com/webhookb2/raw-secret-token";
+        String json = """
+                {"centerId":%d,"warehouseId":null,"alertType":"CO2","active":true,"channels":[{"type":"WEBHOOK","enabled":true,"webhookProvider":"TEAMS","webhookUrl":"%s"}]}
+                """.formatted(centerId, teamsWebhookUrl);
+
+        mockMvc.perform(post("/api/v1/notification-channel-configs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alertType").value("CO2"))
+                .andExpect(jsonPath("$.channels[0].webhookProvider").value("TEAMS"))
+                .andExpect(jsonPath("$.channels[0].webhookUrl").doesNotExist());
+
+        assertThat(webhookEndpointConfigRepository.findByCenterIdAndProviderTypeAndEnabledTrue(
+                centerId, WebhookEndpointConfig.WebhookProviderType.TEAMS))
+                .singleElement()
+                .satisfies(endpoint -> assertThat(endpoint.getWebhookUrl()).isEqualTo(teamsWebhookUrl));
+    }
+
     /**
      * Verifies that updating a config returns HTTP 200 with updated data.
      */
@@ -217,12 +239,12 @@ class NotificationChannelConfigControllerTest {
         config.setActive(true);
         config.setChannels(List.of(
                 new NotificationChannelConfig.ChannelEntry(
-                        NotificationChannelConfig.ChannelType.WEBHOOK, true, "SLACK")));
+                        NotificationChannelConfig.ChannelType.WEBHOOK, true, "TEAMS")));
         config = configRepository.save(config);
 
         WebhookEndpointConfig endpoint = new WebhookEndpointConfig();
         endpoint.setCenterId(centerId);
-        endpoint.setProviderType(WebhookEndpointConfig.WebhookProviderType.SLACK);
+        endpoint.setProviderType(WebhookEndpointConfig.WebhookProviderType.TEAMS);
         endpoint.setWebhookUrl("");
         endpoint.setEnabled(true);
         webhookEndpointConfigRepository.save(endpoint);

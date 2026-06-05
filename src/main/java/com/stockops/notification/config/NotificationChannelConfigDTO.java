@@ -55,7 +55,8 @@ record NotificationChannelConfigRequest(
 record ChannelEntryRequest(
         String type,
         boolean enabled,
-        String webhookProvider
+        String webhookProvider,
+        String webhookUrl
 ) {}
 
 /**
