@@ -277,7 +277,7 @@ class AISuggestionServiceTest {
                 "req-execute-failed");
 
         assertThat(failed.getStatus()).isEqualTo(AISuggestionStatus.FAILED);
-        assertThat(failed.getExecutionResult()).isEqualTo("\"inventory service unavailable\"");
+        assertThat(failed.getExecutionResult()).isEqualTo("inventory service unavailable");
         assertThat(failed.getExecutedAt()).isNotNull();
         verify(aiSuggestionAuditService).recordFailedExecution(
                 any(AISuggestion.class),

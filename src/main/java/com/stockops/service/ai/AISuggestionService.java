@@ -172,7 +172,7 @@ public class AISuggestionService {
         final String normalizedErrorMessage = errorMessage == null || errorMessage.isBlank()
                 ? "Execution failed"
                 : errorMessage;
-        suggestion.setExecutionResult(toJsonString(normalizedErrorMessage));
+        suggestion.setExecutionResult(normalizedErrorMessage);
 
         final AISuggestion saved = saveWithOptimisticLockGuard(suggestion);
         aiSuggestionAuditService.recordFailedExecution(before, saved, auditActor(currentUser), requestId, normalizedErrorMessage);

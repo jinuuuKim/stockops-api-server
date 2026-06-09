@@ -2,6 +2,7 @@ package com.stockops.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,10 +13,10 @@ import com.stockops.repository.AuditLogRepository;
 import com.stockops.repository.UserRepository;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -51,8 +52,8 @@ class AuditLogServiceTest {
         performer.setId(2L);
         performer.setName("StockOps Admin");
 
-        when(auditLogRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of(auditLog));
-        when(userRepository.findById(2L)).thenReturn(Optional.of(performer));
+        when(auditLogRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(auditLog)));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(performer));
 
         final List<AuditLogDTO> results = auditLogService.searchAuditLogs(null, null, null, null, null);
 
@@ -60,6 +61,6 @@ class AuditLogServiceTest {
             assertThat(result.entityType()).isEqualTo("Product");
             assertThat(result.performedByName()).isEqualTo("StockOps Admin");
         });
-        verify(auditLogRepository).findAll(any(Specification.class), any(Sort.class));
+        verify(auditLogRepository).findAll(any(Specification.class), any(Pageable.class));
     }
 }
