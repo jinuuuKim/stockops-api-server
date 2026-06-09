@@ -18,6 +18,8 @@ server:
   port: 8080
 
 logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%level] [%thread] %logger{36} - %msg%n"
   level:
     # CRUD request/response logging — READ (GET) logs at DEBUG, hidden in prod.
     # Override per-profile: local/dev use DEBUG so read operations are visible.
