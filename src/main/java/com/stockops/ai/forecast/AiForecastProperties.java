@@ -15,6 +15,8 @@ public class AiForecastProperties {
 
     private String url = "http://localhost:8000";
 
+    private String apiKey = "";
+
     private Duration connectTimeout = Duration.ofSeconds(5);
 
     private Duration readTimeout = Duration.ofSeconds(5);
@@ -29,6 +31,14 @@ public class AiForecastProperties {
 
     public void setUrl(final String url) {
         this.url = url;
+    }
+
+    public String getApiKey() {
+        return this.apiKey;
+    }
+
+    public void setApiKey(final String apiKey) {
+        this.apiKey = apiKey;
     }
 
     public Duration getConnectTimeout() {

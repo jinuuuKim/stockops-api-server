@@ -73,6 +73,9 @@ public class AiForecastClient {
         final String url = properties.getUrl() + "/predict";
         final HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        if (properties.getApiKey() != null && !properties.getApiKey().isBlank()) {
+            headers.set("X-API-Key", properties.getApiKey());
+        }
         final HttpEntity<AiForecastRequest> request = new HttpEntity<>(new AiForecastRequest(productId, days), headers);
 
         try {
@@ -111,6 +114,9 @@ public class AiForecastClient {
         final String url = properties.getUrl() + "/predict/bulk";
         final HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        if (properties.getApiKey() != null && !properties.getApiKey().isBlank()) {
+            headers.set("X-API-Key", properties.getApiKey());
+        }
         final HttpEntity<AiBulkForecastRequest> request = new HttpEntity<>(new AiBulkForecastRequest(productIds, days), headers);
 
         try {

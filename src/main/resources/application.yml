@@ -93,6 +93,7 @@ stockops:
     daily-cron: 0 45 1 * * ?
   ai-service:
     url: ${STOCKOPS_AI_SERVICE_URL:http://localhost:8000}
+    api-key: ${STOCKOPS_AI_SERVICE_API_KEY:}
     connect-timeout: 5s
     read-timeout: 5s
     circuit-breaker-failure-threshold: 3
@@ -102,6 +103,28 @@ stockops:
     enabled: ${GEMINI_ENABLED:false}
     model-name: gemini-pro
     max-tokens: 1024
+  ai:
+    bedrock:
+      enabled: ${STOCKOPS_BEDROCK_ENABLED:false}
+      region: ${STOCKOPS_BEDROCK_REGION:ap-northeast-2}
+      model-id: ${STOCKOPS_BEDROCK_MODEL_ID:}
+      inference-profile-arn: ${STOCKOPS_BEDROCK_INFERENCE_PROFILE_ARN:}
+      knowledge-base-id: ${STOCKOPS_BEDROCK_KNOWLEDGE_BASE_ID:}
+      agent-id: ${STOCKOPS_BEDROCK_AGENT_ID:}
+      agent-alias-id: ${STOCKOPS_BEDROCK_AGENT_ALIAS_ID:}
+      connect-timeout: 5s
+      read-timeout: 20s
+      max-output-tokens: 1200
+      temperature: 0.2
+    vertex:
+      enabled: ${STOCKOPS_VERTEX_AI_ENABLED:false}
+      project-id: ${STOCKOPS_VERTEX_AI_PROJECT_ID:}
+      location: ${STOCKOPS_VERTEX_AI_LOCATION:us-central1}
+      model-id: ${STOCKOPS_VERTEX_AI_MODEL_ID:gemini-2.5-flash}
+      credentials-json: ${STOCKOPS_VERTEX_AI_CREDENTIALS_JSON:}
+      fallback-notice: ${STOCKOPS_AI_FALLBACK_NOTICE:기본 제공 모델의 연결이 불안정하여 보조 시스템으로 우회합니다.}
+      no-service-notice: ${STOCKOPS_AI_NO_SERVICE_NOTICE:연동된 AI서비스가 없습니다.}
+      unauthenticated-notice: ${STOCKOPS_AI_UNAUTHENTICATED_NOTICE:인증된 AI서비스가 없습니다.}
 
 ---
 spring:

@@ -23,6 +23,8 @@
         <maven.compiler.release>21</maven.compiler.release>
         <byte-buddy.version>1.17.8</byte-buddy.version>
         <jacoco.version>0.8.14</jacoco.version>
+        <aws.sdk.version>2.44.13</aws.sdk.version>
+        <google.genai.version>1.5.0</google.genai.version>
     </properties>
 
     <dependencies>
@@ -132,6 +134,22 @@
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-lettuce</artifactId>
             <version>8.14.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>bedrockruntime</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>bedrockagentruntime</artifactId>
+            <version>${aws.sdk.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.genai</groupId>
+            <artifactId>google-genai</artifactId>
+            <version>${google.genai.version}</version>
         </dependency>
 
         <dependency>
