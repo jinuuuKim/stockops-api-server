@@ -212,6 +212,21 @@ public class AIRecommendationService {
     }
 
     /**
+     * Returns a single recommendation by id, scoped to the current user's center/warehouse access.
+     *
+     * @param recommendationId recommendation identifier
+     * @return recommendation payload
+     * @throws ResourceNotFoundException when no recommendation exists for the given id
+     */
+    @Transactional(readOnly = true)
+    public AIRecommendationDTO detailRecommendation(final Long recommendationId) {
+        final AIRecommendation recommendation = recommendationRepository.findById(recommendationId)
+                .orElseThrow(() -> new ResourceNotFoundException("AI recommendation not found: " + recommendationId));
+        scopeGuard.assertCenterWarehouseAccess(recommendation.getCenterId(), recommendation.getWarehouseId());
+        return toDTO(recommendation, loadProducts(Set.of(recommendation.getProductId())));
+    }
+
+    /**
      * Approves one ready recommendation into a draft purchase order.
      * The method never submits or auto-accepts the draft downstream.
      * Evicts the recommendations cache so the approved status is reflected immediately.
