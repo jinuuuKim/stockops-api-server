@@ -7,6 +7,8 @@ import com.stockops.ai.provider.AiProviderFacade;
 import com.stockops.ai.provider.AiServiceStatus;
 import com.stockops.dto.AIRecommendationDTO;
 import com.stockops.entity.ai.AIRecommendationStatus;
+import com.stockops.repository.ExpiryAlertRepository;
+import com.stockops.service.EnvironmentQueryService;
 import com.stockops.service.ai.AIRecommendationService;
 import com.stockops.service.ai.AISuggestionService;
 import java.math.BigDecimal;
@@ -35,13 +37,15 @@ class BedrockAiFacadeTest {
     @Mock BedrockAgentRuntimeClientAdapter agentAdapter;
     @Mock AIRecommendationService recommendationService;
     @Mock AISuggestionService aiSuggestionService;
+    @Mock EnvironmentQueryService environmentQueryService;
+    @Mock ExpiryAlertRepository expiryAlertRepository;
 
     BedrockAiFacade facade;
 
     @BeforeEach
     void setUp() {
         facade = new BedrockAiFacade(providerFacade, promptBuilder, properties, agentAdapter,
-                recommendationService, aiSuggestionService);
+                recommendationService, aiSuggestionService, environmentQueryService, expiryAlertRepository);
     }
 
     @Test
@@ -124,6 +128,8 @@ class BedrockAiFacadeTest {
     void summarizeOperations_parsesJsonFieldsFromBedrockResponse() {
         when(properties.isEnabled()).thenReturn(true);
         when(recommendationService.listRecommendations(any(), any(), any(), any())).thenReturn(java.util.List.of());
+        when(environmentQueryService.getAlerts(7)).thenReturn(java.util.List.of());
+        when(expiryAlertRepository.countByAlertLevelAndAcknowledgedFalse(any())).thenReturn(0L);
         when(promptBuilder.buildOpsSummaryPrompt(any())).thenReturn("prompt");
         final String bedrockJson = """
                 {"summary":"운영 위험 높음","urgentItems":["재고 부족"],

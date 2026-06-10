@@ -15,6 +15,8 @@ import com.stockops.ai.provider.AiGenerationRequest;
 import com.stockops.ai.provider.AiGenerationResponse;
 import com.stockops.ai.provider.AiProviderFacade;
 import com.stockops.dto.AIRecommendationDTO;
+import com.stockops.repository.ExpiryAlertRepository;
+import com.stockops.service.EnvironmentQueryService;
 import com.stockops.service.ai.AIRecommendationService;
 import com.stockops.service.ai.AISuggestionService;
 import java.time.Instant;
@@ -42,19 +44,25 @@ public class BedrockAiFacade {
     private final BedrockAgentRuntimeClientAdapter agentAdapter;
     private final AIRecommendationService recommendationService;
     private final AISuggestionService aiSuggestionService;
+    private final EnvironmentQueryService environmentQueryService;
+    private final ExpiryAlertRepository expiryAlertRepository;
 
     public BedrockAiFacade(final AiProviderFacade providerFacade,
                            final BedrockPromptBuilder promptBuilder,
                            final BedrockAiProperties properties,
                            final BedrockAgentRuntimeClientAdapter agentAdapter,
                            final AIRecommendationService recommendationService,
-                           final AISuggestionService aiSuggestionService) {
+                           final AISuggestionService aiSuggestionService,
+                           final EnvironmentQueryService environmentQueryService,
+                           final ExpiryAlertRepository expiryAlertRepository) {
         this.providerFacade = providerFacade;
         this.promptBuilder = promptBuilder;
         this.properties = properties;
         this.agentAdapter = agentAdapter;
         this.recommendationService = recommendationService;
         this.aiSuggestionService = aiSuggestionService;
+        this.environmentQueryService = environmentQueryService;
+        this.expiryAlertRepository = expiryAlertRepository;
     }
 
     @Cacheable(
@@ -297,9 +305,32 @@ public class BedrockAiFacade {
         return "MEDIUM";
     }
 
+    /**
+     * Builds an enriched JSON facts payload for the Bedrock operations summary prompt.
+     * Includes inventory recommendations, sensor alerts (7-day window), and expiry risk counts.
+     */
     private String buildOpsFacts(final LocalDate businessDate, final Long centerId, final Long warehouseId) {
         final List<AIRecommendationDTO> recommendations =
                 recommendationService.listRecommendations(businessDate, centerId, warehouseId, null);
+
+        // Sensor anomaly data — last 7 days
+        List<Object> sensorAlerts = List.of();
+        try {
+            sensorAlerts = List.copyOf(environmentQueryService.getAlerts(7));
+        } catch (final RuntimeException e) {
+            log.warn("[OPS_FACTS] Could not load sensor alerts: {}", e.getMessage());
+        }
+
+        // Expiry risk counts by alert level
+        long criticalExpiryCount = 0;
+        long warningExpiryCount = 0;
+        try {
+            criticalExpiryCount = expiryAlertRepository.countByAlertLevelAndAcknowledgedFalse("CRITICAL");
+            warningExpiryCount = expiryAlertRepository.countByAlertLevelAndAcknowledgedFalse("WARNING");
+        } catch (final RuntimeException e) {
+            log.warn("[OPS_FACTS] Could not load expiry alert counts: {}", e.getMessage());
+        }
+
         final Map<String, Object> facts = new LinkedHashMap<>();
         facts.put("businessDate", businessDate);
         facts.put("centerId", centerId);
@@ -315,6 +346,10 @@ public class BedrockAiFacade {
                     item.put("status", r.status());
                     return item;
                 }).toList());
+        facts.put("sensorAlerts", sensorAlerts.stream().limit(10).toList());
+        facts.put("expiryRisk", Map.of(
+                "critical", criticalExpiryCount,
+                "warning", warningExpiryCount));
         try {
             return JSON.writeValueAsString(facts);
         } catch (final JsonProcessingException e) {

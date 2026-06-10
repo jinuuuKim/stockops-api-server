@@ -418,3 +418,21 @@
   - JSON 파싱 실패 → log.warn + raw text/빈 리스트로 graceful fallback
 - Blockers: 없음
 - Verification: mvn test — 전체 테스트 PASS (진행 중)
+
+---
+
+## 2026-06-10 | Phase 2 - Task 3b (운영 요약 팩트 보완)
+
+- Date: 2026-06-10
+- Phase: Phase 2 보완 — 운영 요약 입력 데이터 보완
+- Summary: 설계 문서 5.4절에 명시된 BedrockOpsSummaryService 입력 데이터 후보 중 AIRecommendationService만 사용하고 있던 buildOpsFacts()를 보완. EnvironmentQueryService(7일 센서 알림), ExpiryAlertRepository(만료 위험 건수)를 추가.
+- Files changed:
+  - src/main/java/com/stockops/ai/bedrock/BedrockAiFacade.java (buildOpsFacts에 sensorAlerts, expiryRisk 추가; EnvironmentQueryService, ExpiryAlertRepository 주입)
+  - src/test/java/com/stockops/ai/bedrock/BedrockAiFacadeTest.java (새 mock 추가, summarizeOperations 테스트에 stub 추가)
+- Decisions:
+  - EnvironmentQueryService: 7일 센서 알림, 최대 10건 (Bedrock 컨텍스트 절약)
+  - ExpiryAlertRepository: countByAlertLevelAndAcknowledgedFalse("CRITICAL/WARNING") — aggregate만 전달
+  - 데이터 로드 실패 시 log.warn + 빈 값으로 graceful degradation (센서/만료 데이터 없어도 요약 생성 계속)
+  - InventoryQueryService: 개별 재고 레코드는 너무 많고 safetyStock 필드 없음 — 향후 Phase 3에서 집계 API 추가 후 포함 검토
+- Blockers: 없음
+- Verification: mvn test — 전체 테스트 PASS (진행 중)
