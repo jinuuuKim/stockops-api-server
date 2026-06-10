@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.stockops.entity.AlertSeverity;
 import com.stockops.entity.EnvironmentAlert;
 import com.stockops.entity.SensorDevice;
+import com.stockops.environment.EnvironmentAlertNotifier;
 import com.stockops.repository.EnvironmentAlertRepository;
 import com.stockops.repository.SensorDeviceRepository;
 import java.util.Optional;
@@ -36,6 +37,9 @@ class TelemetryIngestionServiceTest {
     @Mock
     private EnvironmentAlertRepository environmentAlertRepository;
 
+    @Mock
+    private EnvironmentAlertNotifier environmentAlertNotifier;
+
     @InjectMocks
     private TelemetryIngestionService telemetryIngestionService;
 
@@ -58,6 +62,7 @@ class TelemetryIngestionServiceTest {
         assertThat(captor.getValue().getSeverity()).isEqualTo(AlertSeverity.WARNING);
         assertThat(captor.getValue().isAcknowledged()).isFalse();
         assertThat(captor.getValue().getResolvedAt()).isNull();
+        verify(environmentAlertNotifier).notifyAlertOpened(any(), any());
     }
 
     /**
@@ -77,6 +82,7 @@ class TelemetryIngestionServiceTest {
         final ArgumentCaptor<EnvironmentAlert> captor = ArgumentCaptor.forClass(EnvironmentAlert.class);
         verify(environmentAlertRepository).save(captor.capture());
         assertThat(captor.getValue().getSeverity()).isEqualTo(AlertSeverity.CRITICAL);
+        verify(environmentAlertNotifier).notifyAlertOpened(any(), any());
     }
 
     /**
@@ -112,6 +118,7 @@ class TelemetryIngestionServiceTest {
         final ArgumentCaptor<EnvironmentAlert> captor = ArgumentCaptor.forClass(EnvironmentAlert.class);
         verify(environmentAlertRepository).save(captor.capture());
         assertThat(captor.getValue().getResolvedAt()).isNotNull();
+        verify(environmentAlertNotifier, never()).notifyAlertOpened(any(), any());
     }
 
     /**

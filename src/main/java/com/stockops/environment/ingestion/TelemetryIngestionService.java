@@ -3,6 +3,7 @@ package com.stockops.environment.ingestion;
 import com.stockops.entity.AlertSeverity;
 import com.stockops.entity.EnvironmentAlert;
 import com.stockops.entity.SensorDevice;
+import com.stockops.environment.EnvironmentAlertNotifier;
 import com.stockops.repository.EnvironmentAlertRepository;
 import com.stockops.repository.SensorDeviceRepository;
 import java.time.Instant;
@@ -35,18 +36,22 @@ public class TelemetryIngestionService {
 
     private final SensorDeviceRepository sensorDeviceRepository;
     private final EnvironmentAlertRepository environmentAlertRepository;
+    private final EnvironmentAlertNotifier environmentAlertNotifier;
 
     /**
      * Creates the telemetry ingestion service.
      *
      * @param sensorDeviceRepository sensor device repository
      * @param environmentAlertRepository environment alert (event) repository
+     * @param environmentAlertNotifier best-effort alert notifier (webhook/email)
      */
     public TelemetryIngestionService(
             final SensorDeviceRepository sensorDeviceRepository,
-            final EnvironmentAlertRepository environmentAlertRepository) {
+            final EnvironmentAlertRepository environmentAlertRepository,
+            final EnvironmentAlertNotifier environmentAlertNotifier) {
         this.sensorDeviceRepository = sensorDeviceRepository;
         this.environmentAlertRepository = environmentAlertRepository;
+        this.environmentAlertNotifier = environmentAlertNotifier;
     }
 
     /**
@@ -102,8 +107,9 @@ public class TelemetryIngestionService {
             if (alert.getSeverity() != severity) {
                 alert.setSeverity(severity);
                 alert.setMessage(message);
-                environmentAlertRepository.save(alert);
+                final EnvironmentAlert escalated = environmentAlertRepository.save(alert);
                 LOGGER.debug("Updated active alert severity for sensorDeviceId={} to {}", device.getId(), severity);
+                environmentAlertNotifier.notifyAlertOpened(escalated, device);
             }
             return;
         }
@@ -114,8 +120,9 @@ public class TelemetryIngestionService {
         alert.setSeverity(severity);
         alert.setMessage(message);
         alert.setAcknowledged(false);
-        environmentAlertRepository.save(alert);
+        final EnvironmentAlert opened = environmentAlertRepository.save(alert);
         LOGGER.debug("Opened {} alert for sensorDeviceId={}", severity, device.getId());
+        environmentAlertNotifier.notifyAlertOpened(opened, device);
     }
 
     /**

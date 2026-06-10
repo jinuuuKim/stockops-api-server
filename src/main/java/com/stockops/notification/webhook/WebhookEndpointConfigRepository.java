@@ -24,6 +24,14 @@ public interface WebhookEndpointConfigRepository extends JpaRepository<WebhookEn
     List<WebhookEndpointConfig> findByCenterIdAndEnabledTrue(Long centerId);
 
     /**
+     * Finds all enabled endpoints regardless of scope (used for global alerts such as
+     * environment sensor events that are not bound to a center/warehouse).
+     *
+     * @return list of all enabled endpoint configs
+     */
+    List<WebhookEndpointConfig> findByEnabledTrue();
+
+    /**
      * Finds all enabled endpoints for a given warehouse.
      *
      * @param warehouseId warehouse identifier
