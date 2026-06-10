@@ -53,3 +53,32 @@ Use upper snake case names:
 - AWS account IDs
 - Terraform state
 - Personal local paths
+
+## Metrics And Prometheus
+
+The API server uses Spring Boot Actuator and the Micrometer Prometheus registry (both already present in `pom.xml`).
+
+| Variable | Example | Notes |
+| --- | --- | --- |
+| `STOCKOPS_ACTUATOR_EXPOSURE` | `health,info,metrics,prometheus` | Exposes `/actuator/prometheus` when `prometheus` is included. |
+| `STOCKOPS_ACTUATOR_HEALTH_SHOW_DETAILS` | `never` | Avoids exposing internals publicly. |
+| `STOCKOPS_ENVIRONMENT` | `dev`, `test`, `prod` | Added as a common metrics tag (`environment`). |
+| `STOCKOPS_ACTUATOR_PROMETHEUS_PUBLIC` | `false` | When `true`, `/actuator/prometheus` is reachable without authentication. Enable **only** behind private networking, a reverse-proxy allowlist, VPN, or an authenticated scraper. Default `false` keeps it authenticated. |
+
+### Security policy chosen
+
+- `/actuator/health` is public (load balancers).
+- `/actuator/prometheus` requires authentication by default; set `STOCKOPS_ACTUATOR_PROMETHEUS_PUBLIC=true` only when the network layer already restricts access.
+
+Example Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: stockops-api-server
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - api-server.example.internal:8080
+```
+
+Use private networking, reverse proxy allowlists, VPN, or authenticated access for production metrics scraping.

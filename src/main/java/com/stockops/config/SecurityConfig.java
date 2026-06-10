@@ -2,6 +2,7 @@ package com.stockops.config;
 
 import com.stockops.logging.CrudRequestLoggingFilter;
 import com.stockops.security.JwtAuthenticationFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -48,7 +49,9 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(final HttpSecurity http,
                                            final JwtAuthenticationFilter jwtAuthenticationFilter,
                                            final Optional<RateLimitFilter> rateLimitFilter,
-                                           final CrudRequestLoggingFilter crudRequestLoggingFilter) throws Exception {
+                                           final CrudRequestLoggingFilter crudRequestLoggingFilter,
+                                           @Value("${stockops.actuator.prometheus-public:false}")
+                                           final boolean prometheusPublic) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .formLogin(form -> form.disable())
@@ -72,12 +75,19 @@ public class SecurityConfig {
                         .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
                         .accessDeniedHandler((request, response, accessDeniedException) ->
                                 response.sendError(HttpStatus.FORBIDDEN.value(), HttpStatus.FORBIDDEN.getReasonPhrase())))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/error").permitAll()
-                        .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/ws/**", "/ws-sockjs/**").permitAll()
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                        auth.requestMatchers("/api/v1/auth/**").permitAll()
+                            .requestMatchers("/error").permitAll()
+                            .requestMatchers("/actuator/health").permitAll();
+                        // /actuator/prometheus is public ONLY when the deployment network restricts
+                        // access (private subnet, reverse-proxy allowlist, VPN, or scraper network policy).
+                        // Default is authenticated so a public internet mirror does not leak metrics.
+                        if (prometheusPublic) {
+                            auth.requestMatchers("/actuator/prometheus").permitAll();
+                        }
+                        auth.requestMatchers("/ws/**", "/ws-sockjs/**").permitAll()
+                            .anyRequest().authenticated();
+                })
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         // CRUD logging runs after JWT (so the security context is populated) but before rate limiting

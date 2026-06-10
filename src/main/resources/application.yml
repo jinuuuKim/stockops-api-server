@@ -29,7 +29,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: ${STOCKOPS_ACTUATOR_EXPOSURE:health,info,metrics,prometheus}
   health:
     redis:
       enabled: ${STOCKOPS_REDIS_ENABLED:true}
@@ -37,7 +37,11 @@ management:
       enabled: true
   endpoint:
     health:
-      show-details: never
+      show-details: ${STOCKOPS_ACTUATOR_HEALTH_SHOW_DETAILS:never}
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${STOCKOPS_ENVIRONMENT:local}
 
 springdoc:
   api-docs:
