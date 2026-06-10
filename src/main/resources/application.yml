@@ -113,19 +113,11 @@ stockops:
     lead-time-lookback-days: 90
     default-lead-time-days: 1
     daily-cron: 0 45 1 * * ?
-  ai-service:
-    url: ${STOCKOPS_AI_SERVICE_URL:http://localhost:8000}
-    api-key: ${STOCKOPS_AI_SERVICE_API_KEY:}
-    connect-timeout: 5s
-    read-timeout: 5s
-    circuit-breaker-failure-threshold: 3
-    circuit-breaker-cooldown: 30s
-  ai.gemini:
-    api-key: ${GEMINI_API_KEY:}
-    enabled: ${GEMINI_ENABLED:false}
-    model-name: gemini-pro
-    max-tokens: 1024
-  ai:
+    gemini:
+      api-key: ${GEMINI_API_KEY:}
+      enabled: ${GEMINI_ENABLED:false}
+      model-name: gemini-pro
+      max-tokens: 1024
     bedrock:
       enabled: ${STOCKOPS_BEDROCK_ENABLED:false}
       region: ${STOCKOPS_BEDROCK_REGION:ap-northeast-2}
@@ -154,6 +146,13 @@ stockops:
       fallback-notice: ${STOCKOPS_AI_FALLBACK_NOTICE:기본 제공 모델의 연결이 불안정하여 보조 시스템으로 우회합니다.}
       no-service-notice: ${STOCKOPS_AI_NO_SERVICE_NOTICE:연동된 AI서비스가 없습니다.}
       unauthenticated-notice: ${STOCKOPS_AI_UNAUTHENTICATED_NOTICE:인증된 AI서비스가 없습니다.}
+  ai-service:
+    url: ${STOCKOPS_AI_SERVICE_URL:http://localhost:8000}
+    api-key: ${STOCKOPS_AI_SERVICE_API_KEY:}
+    connect-timeout: 5s
+    read-timeout: 5s
+    circuit-breaker-failure-threshold: 3
+    circuit-breaker-cooldown: 30s
 
 ---
 spring:
