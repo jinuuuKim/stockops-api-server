@@ -5,10 +5,18 @@ import com.stockops.ai.bedrock.AiRagRateLimiter;
 import com.stockops.ai.bedrock.BedrockAiFacade;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
+import com.stockops.ai.bedrock.dto.BedrockOpsSummaryResponse;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryRequest;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryResponse;
+import com.stockops.ai.bedrock.dto.BedrockRecommendationExplanationResponse;
+import com.stockops.dto.AIRecommendationDTO;
+import com.stockops.entity.ai.AIRecommendationStatus;
 import com.stockops.service.ai.AIRecommendationService;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,7 +27,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -65,5 +76,80 @@ class BedrockAiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.answer").value("재고 보충을 권장합니다."))
                 .andExpect(jsonPath("$.actionSuggested").value(true));
+    }
+
+    @Test
+    void explainRecommendation_returns200WithExplanationFields() throws Exception {
+        final AIRecommendationDTO dto = sampleDto();
+        when(recommendationService.detailRecommendation(anyLong())).thenReturn(dto);
+        when(bedrockAiFacade.explainRecommendation(any())).thenReturn(
+                new BedrockRecommendationExplanationResponse(
+                        1L, "재고 부족 위험", List.of("안전재고 이하"),
+                        List.of("납기 확인"), "HIGH", "anthropic.claude-3-haiku", Instant.now()));
+
+        mockMvc.perform(post("/api/v1/ai/bedrock/recommendations/1/explain"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recommendationId").value(1))
+                .andExpect(jsonPath("$.summary").value("재고 부족 위험"))
+                .andExpect(jsonPath("$.riskLevel").value("HIGH"))
+                .andExpect(jsonPath("$.reasons[0]").value("안전재고 이하"))
+                .andExpect(jsonPath("$.modelId").value("anthropic.claude-3-haiku"));
+    }
+
+    @Test
+    void opsSummary_returns200WithSourceCountsAndConfidenceCaveat() throws Exception {
+        when(bedrockAiFacade.summarizeOperations(any(), any(), any())).thenReturn(
+                new BedrockOpsSummaryResponse(
+                        LocalDate.of(2026, 6, 10), 1L, 1L,
+                        "운영 위험 높음",
+                        List.of("재고 부족"),
+                        List.of("즉시 발주"),
+                        "HIGH",
+                        Instant.now(),
+                        Map.of("recommendations", 3, "sensorAlerts", 2,
+                                "criticalExpiry", 1, "warningExpiry", 0,
+                                "overdueShipments", 1),
+                        "추천 3건, 센서 알림 2건을 기반으로 생성되었습니다."));
+
+        mockMvc.perform(get("/api/v1/ai/bedrock/ops-summary")
+                        .param("businessDate", "2026-06-10")
+                        .param("centerId", "1")
+                        .param("warehouseId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").value("운영 위험 높음"))
+                .andExpect(jsonPath("$.riskLevel").value("HIGH"))
+                .andExpect(jsonPath("$.sourceCounts.recommendations").value(3))
+                .andExpect(jsonPath("$.sourceCounts.overdueShipments").value(1))
+                .andExpect(jsonPath("$.confidenceCaveat").value("추천 3건, 센서 알림 2건을 기반으로 생성되었습니다."));
+    }
+
+    @Test
+    void queryKnowledgeBase_invokesRateLimiterWhenAuthenticationIsNull() throws Exception {
+        // Standalone MockMvc has no Authentication; rate limiter should be skipped (null-guard)
+        when(bedrockAiFacade.queryKnowledgeBase(any())).thenReturn(
+                new BedrockRagQueryResponse("답변입니다.", List.of(), null));
+
+        mockMvc.perform(post("/api/v1/ai/bedrock/rag/query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new BedrockRagQueryRequest("질문", null, null))))
+                .andExpect(status().isOk());
+
+        // Authentication is null in standalone MockMvc, so checkRagLimit must NOT be called
+        verify(ragRateLimiter, org.mockito.Mockito.never()).checkRagLimit(any());
+    }
+
+    private AIRecommendationDTO sampleDto() {
+        return new AIRecommendationDTO(
+                1L, LocalDate.of(2026, 6, 10),
+                100L, "샘플 상품", "BAR-001",
+                1L, 1L,
+                AIRecommendationStatus.READY_FOR_APPROVAL,
+                10, 5, 50, 48, 3, 15,
+                BigDecimal.valueOf(7.5), BigDecimal.valueOf(8.0), BigDecimal.valueOf(7.8),
+                30, false, null, null, null, null, null,
+                "v2.0.0",
+                Instant.parse("2026-06-10T00:00:00Z"),
+                Instant.parse("2026-06-10T00:00:00Z"));
     }
 }
