@@ -87,7 +87,8 @@ public class CrudRequestLoggingFilter extends OncePerRequestFilter {
      */
     private static final Set<String> SENSITIVE_FIELDS = Set.of(
             "password", "temporaryPassword", "secret", "token",
-            "accessToken", "refreshToken", "apiKey", "webhookUrl"
+            "accessToken", "refreshToken", "apiKey", "webhookUrl",
+            "authorization", "authToken", "idToken"
     );
 
     /**
@@ -272,6 +273,21 @@ public class CrudRequestLoggingFilter extends OncePerRequestFilter {
      * @return body with sensitive values replaced
      */
     private String maskSensitiveFields(final String body) {
+        return maskSensitiveFieldsStatic(body);
+    }
+
+    /**
+     * Test-visible entry point for {@link #maskSensitiveFieldsStatic(String)} so unit tests can
+     * exercise the masking logic without constructing a servlet request/response pair.
+     *
+     * @param body raw body snippet
+     * @return body with sensitive values replaced
+     */
+    static String maskForTest(final String body) {
+        return maskSensitiveFieldsStatic(body);
+    }
+
+    private static String maskSensitiveFieldsStatic(final String body) {
         String masked = body;
         for (final String field : SENSITIVE_FIELDS) {
             masked = masked.replaceAll(
