@@ -15,7 +15,7 @@ WORKDIR /app
 
 RUN apk add --no-cache curl
 
-ENV JAVA_OPTS="-Xms256m -Xmx512m"
+ENV JAVA_OPTS="-Xms256m -Xmx512m -Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8"
 
 COPY --from=build /workspace/target/backend-0.0.1-SNAPSHOT.jar /app/app.jar
 
