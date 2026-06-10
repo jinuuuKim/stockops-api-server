@@ -620,3 +620,49 @@
   - rate-limiter null-guard: null authentication에서 checkRagLimit 미호출 확인
 - Blockers: 없음
 - Verification: BedrockPromptBuilderTest 4/4 PASS, BedrockAiControllerTest 5/5 PASS
+
+---
+
+## 2026-06-10 | Phase 6 — AuditLog 권한 이벤트 ops facts 보강
+
+- Date: 2026-06-10
+- Phase: Phase 6 (Task 1)
+- Summary: 설계 문서 §3.2/§5.4 미구현 항목인 AuditLog 기반 입력 데이터 보강 구현. 권한상 민감한 감사 로그 이벤트(User/Role/Permission/RolePermission)의 24시간 집계를 buildOpsFacts()에 추가. "반복 실패" 부분은 AuditLog 스키마에 outcome/severity 필드 없어 미구현(스키마 변경 필요, 별도 작업).
+- Analysis:
+  - §3.2 "반복 실패하거나 권한상 민감한 감사 로그 이벤트" 중 "권한 변경" 부분만 구현 가능.
+  - AuditLogService 직접 주입 대신 AuditLogRepository 직접 주입 선택 — UserRepository 의존 없음, 단순 카운트에 N+1 batch 불필요, BedrockAiFacade 기존 직접 Repository 주입 패턴과 일치.
+  - privilege entity types: User/Role/Permission/RolePermission — 모두 MutationAuditEntityListener 적용, entityType = entity.getClass().getSimpleName() 저장 확인.
+  - 어드바이저(상위 모델) 검토 결과: 단순 24h DELETE 집계는 부적합(신호 없음) → 권한 관련 entityType IN 집계로 방향 전환.
+- Files changed:
+  - src/main/java/com/stockops/repository/AuditLogRepository.java
+    - countByEntityTypeInAndPerformedAtAfter(List<String>, Instant) Spring Data 파생 쿼리 추가
+  - src/main/java/com/stockops/ai/bedrock/BedrockAiFacade.java
+    - PRIVILEGE_ENTITY_TYPES 상수 추가 (User/Role/Permission/RolePermission)
+    - AuditLogRepository 11번째 필드/생성자 인수 추가
+    - buildOpsFacts(): recentPrivilegeEventCount 집계 (24h look-back, fault-tolerant try/catch)
+    - facts map에 "privilegeEvents" 키 추가
+    - OpsFacts record: 7→8 필드 (recentPrivilegeEventCount 추가)
+    - toSourceCounts(): "recentPrivilegeEvents" 키 추가
+    - buildConfidenceCaveat(): total에 recentPrivilegeEventCount 포함, "권한 변경 N건" 메시지 추가
+  - src/test/java/com/stockops/ai/bedrock/BedrockAiFacadeTest.java
+    - @Mock AuditLogRepository auditLogRepository 추가
+    - setUp(): 11-arg BedrockAiFacade 생성자
+    - summarizeOperations_parsesJsonFieldsFromBedrockResponse: auditLogRepository stub + recentPrivilegeEvents 어설션 추가
+    - summarizeOperations_recentPrivilegeEventCountFlowsThroughSourceCounts (신규 — 5L로 소스카운트+confidenceCaveat 검증)
+    - summarizeOperations_privilegeEventQueryFails_degradesGracefully (신규 — fault-tolerant 검증)
+  - src/test/java/com/stockops/controller/BedrockAiControllerTest.java
+    - opsSummary_returns200WithSourceCountsAndConfidenceCaveat: sourceCounts Map에 "recentPrivilegeEvents": 1 추가
+  - src/types/aiOpsSummary.ts (stockops-admin-web)
+    - AiOpsSummarySourceCounts에 recentPrivilegeEvents: number 추가
+  - src/components/AiOpsSummaryPanel.tsx (stockops-admin-web)
+    - SOURCE_LABELS에 "recentPrivilegeEvents": "권한 변경 (24h)" 추가
+  - src/components/AiOpsSummaryPanel.test.tsx (stockops-admin-web)
+    - sampleSummary fixture에 recentPrivilegeEvents: 1 추가
+- Decisions:
+  - AuditLogRepository 직접 주입 (AuditLogService 아님) — 단순 카운트에 DTO 변환/N+1 방지 불필요
+  - privilege entity types 기준: User/Role/Permission/RolePermission (비즈니스 데이터 변경 제외)
+  - 24h 시간 창 — 일별 ops 요약과 일치, Instant.now().minus(24, ChronoUnit.HOURS)
+  - "반복 실패" 부분 미구현 명시 — AuditLog 스키마에 outcome/severity 필드 추가 필요, 별도 스키마 마이그레이션 작업
+- Blockers: 없음
+- Verification: mvn test exit 0, vitest 269/269 PASS
+- Next step: git commit, stockops-ai-docs Phase 6 계획 문서 작성

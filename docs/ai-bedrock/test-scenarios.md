@@ -758,3 +758,30 @@ Use this section when local Chrome/Chromium execution is unavailable.
 - 실행: summarizeOperations(date, centerId, warehouseId)
 - 기대: summary/urgentItems/recommendedActions/riskLevel이 JSON에서 파싱됨
 - 자동화: BedrockAiFacadeTest.summarizeOperations_parsesJsonFieldsFromBedrockResponse (unit)
+
+---
+
+## Phase 6 Scenarios
+
+### TS-P6-001: recentPrivilegeEventCount — sourceCounts 반영
+
+- ID: TS-P6-001
+- Feature: Phase 6 - ops facts privilege event enrichment
+- Test type: Unit
+- 대상: BedrockAiFacade.buildOpsFacts() → OpsFacts.toSourceCounts()
+- 전제: auditLogRepository.countByEntityTypeInAndPerformedAtAfter(PRIVILEGE_ENTITY_TYPES, since) 5L 반환
+- 실행: summarizeOperations(date, null, null)
+- 기대: response.sourceCounts()["recentPrivilegeEvents"] == 5, confidenceCaveat contains "권한 변경 5건"
+- 자동화: BedrockAiFacadeTest.summarizeOperations_recentPrivilegeEventCountFlowsThroughSourceCounts
+- 상태: PASS
+
+### TS-P6-002: auditLogRepository 오류 시 graceful degradation
+
+- ID: TS-P6-002
+- Feature: Phase 6 - ops facts fault tolerance
+- Test type: Unit
+- 대상: BedrockAiFacade.buildOpsFacts() — auditLogRepository 예외 처리
+- 전제: auditLogRepository.countByEntityTypeInAndPerformedAtAfter() RuntimeException 발생
+- 기대: recentPrivilegeEventCount=0 폴백, 요약 생성 계속 진행, 예외 전파 없음
+- 자동화: BedrockAiFacadeTest.summarizeOperations_privilegeEventQueryFails_degradesGracefully
+- 상태: PASS

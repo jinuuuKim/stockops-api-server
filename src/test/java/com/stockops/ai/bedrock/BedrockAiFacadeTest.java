@@ -7,6 +7,7 @@ import com.stockops.ai.provider.AiProviderFacade;
 import com.stockops.ai.provider.AiServiceStatus;
 import com.stockops.dto.AIRecommendationDTO;
 import com.stockops.entity.ai.AIRecommendationStatus;
+import com.stockops.repository.AuditLogRepository;
 import com.stockops.repository.ExpiryAlertRepository;
 import com.stockops.repository.ProductRepository;
 import com.stockops.repository.PurchaseOrderShipmentRepository;
@@ -43,6 +44,7 @@ class BedrockAiFacadeTest {
     @Mock ExpiryAlertRepository expiryAlertRepository;
     @Mock PurchaseOrderShipmentRepository shipmentRepository;
     @Mock ProductRepository productRepository;
+    @Mock AuditLogRepository auditLogRepository;
 
     BedrockAiFacade facade;
 
@@ -50,7 +52,7 @@ class BedrockAiFacadeTest {
     void setUp() {
         facade = new BedrockAiFacade(providerFacade, promptBuilder, properties, agentAdapter,
                 recommendationService, aiSuggestionService, environmentQueryService,
-                expiryAlertRepository, shipmentRepository, productRepository);
+                expiryAlertRepository, shipmentRepository, productRepository, auditLogRepository);
     }
 
     @Test
@@ -141,6 +143,7 @@ class BedrockAiFacadeTest {
         when(expiryAlertRepository.countByAlertLevelAndAcknowledgedFalse(any())).thenReturn(0L);
         when(shipmentRepository.findByEtaDateBeforeAndDeliveredAtIsNull(any())).thenReturn(java.util.List.of());
         when(productRepository.countProductsBelowSafetyStock()).thenReturn(0L);
+        when(auditLogRepository.countByEntityTypeInAndPerformedAtAfter(any(), any())).thenReturn(0L);
         when(promptBuilder.buildOpsSummaryPrompt(any())).thenReturn("prompt");
         final String bedrockJson = """
                 {"summary":"운영 위험 높음","urgentItems":["재고 부족"],
@@ -161,7 +164,65 @@ class BedrockAiFacadeTest {
         assertThat(response.sourceCounts()).containsEntry("sensorAlerts", 0);
         assertThat(response.sourceCounts()).containsEntry("overdueShipments", 0);
         assertThat(response.sourceCounts()).containsEntry("inventoryBelowSafetyStock", 0);
+        assertThat(response.sourceCounts()).containsEntry("recentPrivilegeEvents", 0);
         assertThat(response.confidenceCaveat()).contains("데이터가 부족");
+    }
+
+    @Test
+    void summarizeOperations_recentPrivilegeEventCountFlowsThroughSourceCounts() {
+        // Non-zero stub confirms end-to-end wiring from auditLogRepository → sourceCounts/confidenceCaveat
+        when(properties.isEnabled()).thenReturn(true);
+        when(recommendationService.listRecommendations(any(), any(), any(), any())).thenReturn(java.util.List.of());
+        when(environmentQueryService.getAlerts(7)).thenReturn(java.util.List.of());
+        when(expiryAlertRepository.countByAlertLevelAndAcknowledgedFalse(any())).thenReturn(0L);
+        when(shipmentRepository.findByEtaDateBeforeAndDeliveredAtIsNull(any())).thenReturn(java.util.List.of());
+        when(productRepository.countProductsBelowSafetyStock()).thenReturn(0L);
+        // 5 privilege events → total=5 → non-trivial confidenceCaveat with "권한 변경 5건"
+        when(auditLogRepository.countByEntityTypeInAndPerformedAtAfter(any(), any())).thenReturn(5L);
+        when(promptBuilder.buildOpsSummaryPrompt(any())).thenReturn("prompt");
+        when(providerFacade.generate(any())).thenReturn(
+                new AiGenerationResponse(
+                        """
+                        {"summary":"정상","urgentItems":[],"recommendedActions":[],"riskLevel":"LOW"}
+                        """,
+                        "bedrock", "model",
+                        AiServiceStatus.AVAILABLE, false, null, null, null, null, null));
+
+        final var response = facade.summarizeOperations(LocalDate.of(2026, 6, 10), null, null);
+
+        // §3.2 권한 이벤트 집계 — 5L stub이 sourceCounts["recentPrivilegeEvents"]=5로 흘러야 함
+        assertThat(response.sourceCounts()).containsEntry("recentPrivilegeEvents", 5);
+        // total(5) ≥ threshold(5) → 상세 메시지 포함, "권한 변경 5건" 표시
+        assertThat(response.confidenceCaveat()).contains("권한 변경 5건");
+    }
+
+    @Test
+    void summarizeOperations_privilegeEventQueryFails_degradesGracefully() {
+        // auditLogRepository 쿼리 실패 → recentPrivilegeEventCount=0 폴백, 요약 계속 생성 (§8 policy)
+        when(properties.isEnabled()).thenReturn(true);
+        when(recommendationService.listRecommendations(any(), any(), any(), any())).thenReturn(java.util.List.of());
+        when(environmentQueryService.getAlerts(7)).thenReturn(java.util.List.of());
+        when(expiryAlertRepository.countByAlertLevelAndAcknowledgedFalse(any())).thenReturn(0L);
+        when(shipmentRepository.findByEtaDateBeforeAndDeliveredAtIsNull(any())).thenReturn(java.util.List.of());
+        when(productRepository.countProductsBelowSafetyStock()).thenReturn(0L);
+        when(auditLogRepository.countByEntityTypeInAndPerformedAtAfter(any(), any()))
+                .thenThrow(new RuntimeException("DB unavailable"));
+        when(promptBuilder.buildOpsSummaryPrompt(any())).thenReturn("prompt");
+        when(providerFacade.generate(any())).thenReturn(
+                new AiGenerationResponse(
+                        """
+                        {"summary":"정상","urgentItems":[],"recommendedActions":[],"riskLevel":"LOW"}
+                        """,
+                        "bedrock", "model",
+                        AiServiceStatus.AVAILABLE, false, null, null, null, null, null));
+
+        // Must not propagate the RuntimeException — graceful degradation
+        final var response = facade.summarizeOperations(LocalDate.of(2026, 6, 10), null, null);
+
+        assertThat(response).isNotNull();
+        assertThat(response.sourceCounts()).containsEntry("recentPrivilegeEvents", 0);
+        // Summary was still generated despite the audit query failure
+        assertThat(response.summary()).isEqualTo("정상");
     }
 
     @Test

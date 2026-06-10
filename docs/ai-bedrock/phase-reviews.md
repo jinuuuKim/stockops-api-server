@@ -289,3 +289,35 @@
 - Breaking changes: 없음 (sourceCounts에 새 키 추가만, 기존 필드 변경 없음)
 - Constraints verified: AIRecommendationService 예측 알고리즘 무변경, AISuggestion 상태 전이 무변경, 신규 엔드포인트 없음
 - Remaining Phase 5 candidates: Bedrock Agent InvokeAgent SDK (AWS 자격증명 필요), Streaming chat UI (§12 out of scope)
+
+---
+
+## Phase 6 Task 1 — AuditLog 권한 이벤트 ops facts 보강
+
+- Date: 2026-06-10
+- Phase: Phase 6 (Task 1)
+- Phase status: accepted
+- Summary:
+  - AuditLogRepository.countByEntityTypeInAndPerformedAtAfter() Spring Data 파생 쿼리 추가
+  - BedrockAiFacade 생성자 10-arg → 11-arg (AuditLogRepository 추가)
+  - OpsFacts record 7→8 필드 (recentPrivilegeEventCount 추가)
+  - OpsFacts.toSourceCounts()에 "recentPrivilegeEvents" 키 추가
+  - OpsFacts.buildConfidenceCaveat() 메시지에 "권한 변경 N건" 포함
+  - BedrockAiFacadeTest: auditLogRepository mock, 11-arg 생성자, 2 신규 테스트
+  - AiOpsSummarySourceCounts TypeScript 인터페이스에 recentPrivilegeEvents: number 추가
+  - AiOpsSummaryPanel.tsx SOURCE_LABELS에 "recentPrivilegeEvents": "권한 변경 (24h)" 추가
+- Analysis:
+  - §3.2 "반복 실패하거나 권한상 민감한 감사 로그 이벤트" — "반복 실패" 부분은 AuditLog 스키마에 outcome/severity 필드 없어 구현 불가. "권한 변경" 부분만 구현.
+  - AuditLogService 대신 AuditLogRepository 직접 주입 — UserRepository 의존 없음, 단순 카운트에 N+1 batch 불필요
+  - privilege entity types 모두 MutationAuditEntityListener 적용, entityType = getSimpleName() 저장 확인
+  - 어드바이저(상위 모델) 검토: 단순 DELETE 집계는 신호 없음 → entityType IN 집계로 방향 전환
+- New tests added:
+  - BedrockAiFacadeTest.summarizeOperations_recentPrivilegeEventCountFlowsThroughSourceCounts (TS-P6-001)
+  - BedrockAiFacadeTest.summarizeOperations_privilegeEventQueryFails_degradesGracefully (TS-P6-002)
+  - BedrockAiFacadeTest.summarizeOperations_parsesJsonFieldsFromBedrockResponse: recentPrivilegeEvents 어설션 추가
+- Breaking changes: 없음 (sourceCounts에 새 키 추가만, 기존 필드 변경 없음)
+- Constraints verified: AIRecommendationService 예측 알고리즘 무변경, AISuggestion 상태 전이 무변경, 신규 엔드포인트 없음
+- Remaining work (deferred):
+  - "반복 실패" 이벤트 집계 — AuditLog 스키마에 outcome 필드 추가 필요, 별도 스키마 변경 작업
+  - Bedrock Agent InvokeAgent SDK — AWS Agent ID + Alias ID 필요
+  - Streaming chat UI — §12 explicitly out of scope

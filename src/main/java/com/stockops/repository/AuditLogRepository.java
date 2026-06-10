@@ -52,4 +52,20 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
      */
     @Query("select a from AuditLog a where a.entityType <> 'SensorReading' order by a.performedAt desc")
     List<AuditLog> findRecentAuditLogs(Pageable pageable);
+
+    /**
+     * Counts audit log entries whose entity type is in the given list and whose
+     * {@code performedAt} timestamp is strictly after {@code since}.
+     *
+     * <p>Used by {@link com.stockops.ai.bedrock.BedrockAiFacade} to include
+     * privilege-sensitive change volume in the daily ops summary
+     * (design doc §3.2 candidate: 권한상 민감한 감사 로그 이벤트).
+     * Typical caller passes entity types {@code [User, Role, Permission, RolePermission]}
+     * and a 24-hour look-back window.
+     *
+     * @param entityTypes entity type simple names to match (e.g. "User", "Role")
+     * @param since       lower bound for {@code performedAt} (exclusive)
+     * @return count of matching audit log entries
+     */
+    long countByEntityTypeInAndPerformedAtAfter(List<String> entityTypes, Instant since);
 }

@@ -15,6 +15,7 @@ import com.stockops.ai.provider.AiGenerationRequest;
 import com.stockops.ai.provider.AiGenerationResponse;
 import com.stockops.ai.provider.AiProviderFacade;
 import com.stockops.dto.AIRecommendationDTO;
+import com.stockops.repository.AuditLogRepository;
 import com.stockops.repository.ExpiryAlertRepository;
 import com.stockops.repository.ProductRepository;
 import com.stockops.repository.PurchaseOrderShipmentRepository;
@@ -23,6 +24,7 @@ import com.stockops.service.ai.AIRecommendationService;
 import com.stockops.service.ai.AISuggestionService;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,9 @@ public class BedrockAiFacade {
     private static final ObjectMapper JSON = new ObjectMapper()
             .registerModule(new JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    /** Entity type simple names whose audit events are treated as privilege-sensitive (§3.2). */
+    private static final List<String> PRIVILEGE_ENTITY_TYPES =
+            List.of("User", "Role", "Permission", "RolePermission");
 
     private final AiProviderFacade providerFacade;
     private final BedrockPromptBuilder promptBuilder;
@@ -50,6 +55,7 @@ public class BedrockAiFacade {
     private final ExpiryAlertRepository expiryAlertRepository;
     private final PurchaseOrderShipmentRepository shipmentRepository;
     private final ProductRepository productRepository;
+    private final AuditLogRepository auditLogRepository;
 
     public BedrockAiFacade(final AiProviderFacade providerFacade,
                            final BedrockPromptBuilder promptBuilder,
@@ -60,7 +66,8 @@ public class BedrockAiFacade {
                            final EnvironmentQueryService environmentQueryService,
                            final ExpiryAlertRepository expiryAlertRepository,
                            final PurchaseOrderShipmentRepository shipmentRepository,
-                           final ProductRepository productRepository) {
+                           final ProductRepository productRepository,
+                           final AuditLogRepository auditLogRepository) {
         this.providerFacade = providerFacade;
         this.promptBuilder = promptBuilder;
         this.properties = properties;
@@ -71,6 +78,7 @@ public class BedrockAiFacade {
         this.expiryAlertRepository = expiryAlertRepository;
         this.shipmentRepository = shipmentRepository;
         this.productRepository = productRepository;
+        this.auditLogRepository = auditLogRepository;
     }
 
     @Cacheable(
@@ -369,6 +377,20 @@ public class BedrockAiFacade {
             log.warn("[OPS_FACTS] Could not load inventory below safety stock count: {}", e.getMessage());
         }
 
+        // Privilege-sensitive audit events (User, Role, Permission, RolePermission) — last 24 hours.
+        // §3.2 candidate: 권한상 민감한 감사 로그 이벤트.
+        // Note: "반복 실패" half of §3.2 requires an outcome/severity field not currently in
+        // the AuditLog schema; only the "권한 변경" half is implemented here.
+        int recentPrivilegeEventCount = 0;
+        try {
+            recentPrivilegeEventCount = (int) auditLogRepository
+                    .countByEntityTypeInAndPerformedAtAfter(
+                            PRIVILEGE_ENTITY_TYPES,
+                            Instant.now().minus(24, ChronoUnit.HOURS));
+        } catch (final RuntimeException e) {
+            log.warn("[OPS_FACTS] Could not load privilege event count: {}", e.getMessage());
+        }
+
         final int recCount = (int) Math.min(recommendations.size(), 20);
         final int alertCount = (int) Math.min(sensorAlerts.size(), 10);
 
@@ -393,6 +415,7 @@ public class BedrockAiFacade {
                 "warning", warningExpiryCount));
         facts.put("overdueShipments", overdueShipmentCount);
         facts.put("inventoryBelowSafetyStock", inventoryBelowSafetyStockCount);
+        facts.put("privilegeEvents", recentPrivilegeEventCount);
 
         String factsJson;
         try {
@@ -403,7 +426,7 @@ public class BedrockAiFacade {
         }
         return new OpsFacts(factsJson, recCount, alertCount,
                 (int) criticalExpiryCount, (int) warningExpiryCount, overdueShipmentCount,
-                inventoryBelowSafetyStockCount);
+                inventoryBelowSafetyStockCount, recentPrivilegeEventCount);
     }
 
     /**
@@ -418,7 +441,8 @@ public class BedrockAiFacade {
             int criticalExpiryCount,
             int warningExpiryCount,
             int overdueShipmentCount,
-            int inventoryBelowSafetyStockCount) {
+            int inventoryBelowSafetyStockCount,
+            int recentPrivilegeEventCount) {
 
         Map<String, Integer> toSourceCounts() {
             return Map.of(
@@ -427,22 +451,23 @@ public class BedrockAiFacade {
                     "criticalExpiry", criticalExpiryCount,
                     "warningExpiry", warningExpiryCount,
                     "overdueShipments", overdueShipmentCount,
-                    "inventoryBelowSafetyStock", inventoryBelowSafetyStockCount);
+                    "inventoryBelowSafetyStock", inventoryBelowSafetyStockCount,
+                    "recentPrivilegeEvents", recentPrivilegeEventCount);
         }
 
         String buildConfidenceCaveat() {
             final int total = recommendationCount + sensorAlertCount
                     + criticalExpiryCount + warningExpiryCount + overdueShipmentCount
-                    + inventoryBelowSafetyStockCount;
+                    + inventoryBelowSafetyStockCount + recentPrivilegeEventCount;
             if (total < 5) {
                 return "분석 가능한 데이터가 부족합니다. 더 많은 데이터가 확보되면 요약의 신뢰도가 높아집니다.";
             }
             return String.format(
-                    "추천 %d건, 센서 알림 %d건, 만료 경보 %d건, 지연 PO %d건, 안전재고 미달 %d건을 기반으로 생성되었습니다. " +
+                    "추천 %d건, 센서 알림 %d건, 만료 경보 %d건, 지연 PO %d건, 안전재고 미달 %d건, 권한 변경 %d건을 기반으로 생성되었습니다. " +
                     "실제 운영 결정 전 추가 검토를 권장합니다.",
                     recommendationCount, sensorAlertCount,
                     criticalExpiryCount + warningExpiryCount, overdueShipmentCount,
-                    inventoryBelowSafetyStockCount);
+                    inventoryBelowSafetyStockCount, recentPrivilegeEventCount);
         }
     }
 }

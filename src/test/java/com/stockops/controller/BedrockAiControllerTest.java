@@ -108,7 +108,8 @@ class BedrockAiControllerTest {
                         Instant.now(),
                         Map.of("recommendations", 3, "sensorAlerts", 2,
                                 "criticalExpiry", 1, "warningExpiry", 0,
-                                "overdueShipments", 1, "inventoryBelowSafetyStock", 4),
+                                "overdueShipments", 1, "inventoryBelowSafetyStock", 4,
+                                "recentPrivilegeEvents", 1),
                         "추천 3건, 센서 알림 2건을 기반으로 생성되었습니다."));
 
         mockMvc.perform(get("/api/v1/ai/bedrock/ops-summary")
