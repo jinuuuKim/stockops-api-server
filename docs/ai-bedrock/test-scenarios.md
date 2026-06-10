@@ -426,3 +426,41 @@ Use this section when local Chrome/Chromium execution is unavailable.
 - 실행: dispatcher.dispatch("getPurchaseOrderDelaySummary", "{}")
 - 기대: success=true, resultJson에 daysOverdue=3, SHP-001 포함
 - 자동화: AgentToolDispatcherTest.dispatch_getPurchaseOrderDelaySummary_withOverdueShipment_includesDaysOverdue (unit)
+
+---
+
+## TS-P2-015: Bedrock JSON 파싱 — 정상 JSON 응답
+
+- ID: TS-P2-015
+- 대상: BedrockAiFacade.explainRecommendation()
+- 전제: Bedrock이 {"summary":"...","reasons":[...],"reviewerChecklist":[...],"riskLevel":"HIGH"} 형식으로 응답
+- 실행: explainRecommendation(dto)
+- 기대: response.summary() == JSON summary 필드값, reasons/reviewerChecklist == JSON 배열값, riskLevel == "HIGH"
+- 자동화: BedrockAiFacadeTest.explainRecommendation_parsesJsonFieldsFromBedrockResponse (unit)
+
+## TS-P2-016: Bedrock JSON 파싱 — 마크다운 코드펜스
+
+- ID: TS-P2-016
+- 대상: BedrockAiFacade.explainRecommendation()
+- 전제: Bedrock 응답이 ```json ... ``` 코드펜스로 감싸져 있음
+- 실행: explainRecommendation(dto)
+- 기대: 코드펜스 제거 후 JSON 파싱 성공, summary/reasons/riskLevel 정상 반환
+- 자동화: BedrockAiFacadeTest.explainRecommendation_stripsMarkdownCodeFenceFromBedrockResponse (unit)
+
+## TS-P2-017: Bedrock JSON 파싱 — 비JSON 응답 fallback
+
+- ID: TS-P2-017
+- 대상: BedrockAiFacade.explainRecommendation()
+- 전제: Bedrock 응답이 JSON이 아닌 평문 텍스트
+- 실행: explainRecommendation(dto)
+- 기대: response.summary() == 원문 텍스트, reasons == []
+- 자동화: BedrockAiFacadeTest.explainRecommendation_fallsBackToRawTextWhenJsonInvalid (unit)
+
+## TS-P2-018: Bedrock 운영 요약 JSON 파싱
+
+- ID: TS-P2-018
+- 대상: BedrockAiFacade.summarizeOperations()
+- 전제: Bedrock이 {"summary":"...","urgentItems":[...],"recommendedActions":[...],"riskLevel":"HIGH"} 형식으로 응답
+- 실행: summarizeOperations(date, centerId, warehouseId)
+- 기대: summary/urgentItems/recommendedActions/riskLevel이 JSON에서 파싱됨
+- 자동화: BedrockAiFacadeTest.summarizeOperations_parsesJsonFieldsFromBedrockResponse (unit)

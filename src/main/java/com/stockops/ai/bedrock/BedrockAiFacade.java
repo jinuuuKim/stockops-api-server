@@ -1,6 +1,7 @@
 package com.stockops.ai.bedrock;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -75,14 +76,7 @@ public class BedrockAiFacade {
         if (responseText == null || responseText.isBlank()) {
             return fallbackExplanation(recommendation, "Bedrock response was empty.");
         }
-        return new BedrockRecommendationExplanationResponse(
-                recommendation.id(),
-                responseText,
-                List.of("Bedrock generated explanation from recommendation snapshot."),
-                List.of("추천 수량 승인 전 공급 가능 여부를 확인하세요."),
-                riskLevel(recommendation),
-                generation.modelId(),
-                Instant.now());
+        return parseExplanationResponse(responseText, recommendation, generation.modelId());
     }
 
     @Cacheable(
@@ -113,10 +107,7 @@ public class BedrockAiFacade {
                     "AI 운영 요약을 생성하지 못했습니다.",
                     List.of(), List.of(), "LOW", Instant.now());
         }
-        return new BedrockOpsSummaryResponse(
-                businessDate, centerId, warehouseId,
-                responseText,
-                List.of(), List.of(), "MEDIUM", Instant.now());
+        return parseOpsSummaryResponse(responseText, businessDate, centerId, warehouseId);
     }
 
     public BedrockRagQueryResponse queryKnowledgeBase(final BedrockRagQueryRequest request) {
@@ -179,6 +170,104 @@ public class BedrockAiFacade {
                 null,
                 null,
                 null);
+    }
+
+    /**
+     * Parses a Bedrock explanation response JSON into a structured response.
+     * Expected JSON fields: {@code summary}, {@code reasons}, {@code reviewerChecklist}, {@code riskLevel}.
+     * Falls back gracefully if the response is not valid JSON or fields are missing.
+     */
+    private BedrockRecommendationExplanationResponse parseExplanationResponse(
+            final String responseText,
+            final AIRecommendationDTO recommendation,
+            final String modelId) {
+        try {
+            final JsonNode json = JSON.readTree(extractJson(responseText));
+            final String summary = json.has("summary") ? json.get("summary").asText() : responseText;
+            final List<String> reasons = parseStringList(json, "reasons");
+            final List<String> checklist = parseStringList(json, "reviewerChecklist");
+            final String riskLevelStr = json.has("riskLevel")
+                    ? normalizeRiskLevel(json.get("riskLevel").asText())
+                    : riskLevel(recommendation);
+            return new BedrockRecommendationExplanationResponse(
+                    recommendation.id(), summary, reasons, checklist, riskLevelStr, modelId, Instant.now());
+        } catch (final JsonProcessingException | IllegalArgumentException e) {
+            log.warn("[Bedrock] Could not parse explanation JSON, using raw text as summary: {}", e.getMessage());
+            return new BedrockRecommendationExplanationResponse(
+                    recommendation.id(),
+                    responseText,
+                    List.of(),
+                    List.of("추천 수량 승인 전 공급 가능 여부를 확인하세요."),
+                    riskLevel(recommendation),
+                    modelId,
+                    Instant.now());
+        }
+    }
+
+    /**
+     * Parses a Bedrock ops summary response JSON.
+     * Expected JSON fields: {@code summary}, {@code urgentItems}, {@code recommendedActions}, {@code riskLevel}.
+     */
+    private BedrockOpsSummaryResponse parseOpsSummaryResponse(
+            final String responseText,
+            final LocalDate businessDate,
+            final Long centerId,
+            final Long warehouseId) {
+        try {
+            final JsonNode json = JSON.readTree(extractJson(responseText));
+            final String summary = json.has("summary") ? json.get("summary").asText() : responseText;
+            final List<String> urgentItems = parseStringList(json, "urgentItems");
+            final List<String> recommendedActions = parseStringList(json, "recommendedActions");
+            final String riskLevelStr = json.has("riskLevel")
+                    ? normalizeRiskLevel(json.get("riskLevel").asText())
+                    : "MEDIUM";
+            return new BedrockOpsSummaryResponse(
+                    businessDate, centerId, warehouseId,
+                    summary, urgentItems, recommendedActions, riskLevelStr, Instant.now());
+        } catch (final JsonProcessingException | IllegalArgumentException e) {
+            log.warn("[Bedrock] Could not parse ops summary JSON, using raw text: {}", e.getMessage());
+            return new BedrockOpsSummaryResponse(
+                    businessDate, centerId, warehouseId,
+                    responseText, List.of(), List.of(), "MEDIUM", Instant.now());
+        }
+    }
+
+    /**
+     * Extracts a JSON object from the model response. Some models wrap JSON in markdown code fences;
+     * this strips the fence if present.
+     */
+    private static String extractJson(final String text) {
+        final String trimmed = text.strip();
+        // Strip ```json ... ``` or ``` ... ``` fences
+        if (trimmed.startsWith("```")) {
+            final int firstNewline = trimmed.indexOf('\n');
+            final int lastFence = trimmed.lastIndexOf("```");
+            if (firstNewline > 0 && lastFence > firstNewline) {
+                return trimmed.substring(firstNewline + 1, lastFence).strip();
+            }
+        }
+        return trimmed;
+    }
+
+    private static List<String> parseStringList(final JsonNode json, final String field) {
+        if (!json.has(field) || !json.get(field).isArray()) {
+            return List.of();
+        }
+        final List<String> items = new java.util.ArrayList<>();
+        json.get(field).forEach(node -> {
+            if (!node.isNull()) {
+                items.add(node.asText());
+            }
+        });
+        return List.copyOf(items);
+    }
+
+    private static String normalizeRiskLevel(final String raw) {
+        return switch (raw.toUpperCase(java.util.Locale.ROOT)) {
+            case "HIGH", "높음", "높다" -> "HIGH";
+            case "MEDIUM", "MODERATE", "보통", "중간" -> "MEDIUM";
+            default -> "LOW";
+        };
     }
 
     private BedrockRecommendationExplanationResponse fallbackExplanation(

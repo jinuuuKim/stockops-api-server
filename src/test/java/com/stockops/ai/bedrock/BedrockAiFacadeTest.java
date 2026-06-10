@@ -2,7 +2,9 @@ package com.stockops.ai.bedrock;
 
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
+import com.stockops.ai.provider.AiGenerationResponse;
 import com.stockops.ai.provider.AiProviderFacade;
+import com.stockops.ai.provider.AiServiceStatus;
 import com.stockops.dto.AIRecommendationDTO;
 import com.stockops.entity.ai.AIRecommendationStatus;
 import com.stockops.service.ai.AIRecommendationService;
@@ -62,6 +64,81 @@ class BedrockAiFacadeTest {
 
         assertThat(response.summary()).contains("비활성화");
         assertThat(response.riskLevel()).isEqualTo("LOW");
+    }
+
+    @Test
+    void explainRecommendation_parsesJsonFieldsFromBedrockResponse() {
+        when(properties.isEnabled()).thenReturn(true);
+        when(promptBuilder.buildRecommendationExplanationPrompt(any())).thenReturn("prompt");
+        final String bedrockJson = """
+                {"summary":"재고 부족 위험","reasons":["예측 초과","안전재고 이하"],
+                "reviewerChecklist":["납기 확인"],"riskLevel":"HIGH"}
+                """;
+        when(providerFacade.generate(any())).thenReturn(
+                new AiGenerationResponse(bedrockJson, "bedrock", "anthropic.claude-3-haiku",
+                        AiServiceStatus.AVAILABLE, false, null, null, null, 80, 120));
+
+        final var response = facade.explainRecommendation(sampleDto());
+
+        assertThat(response.summary()).isEqualTo("재고 부족 위험");
+        assertThat(response.reasons()).containsExactly("예측 초과", "안전재고 이하");
+        assertThat(response.reviewerChecklist()).containsExactly("납기 확인");
+        assertThat(response.riskLevel()).isEqualTo("HIGH");
+        assertThat(response.modelId()).isEqualTo("anthropic.claude-3-haiku");
+    }
+
+    @Test
+    void explainRecommendation_fallsBackToRawTextWhenJsonInvalid() {
+        when(properties.isEnabled()).thenReturn(true);
+        when(promptBuilder.buildRecommendationExplanationPrompt(any())).thenReturn("prompt");
+        when(providerFacade.generate(any())).thenReturn(
+                new AiGenerationResponse("plain text response (not JSON)", "bedrock",
+                        "model", AiServiceStatus.AVAILABLE, false, null, null, null, null, null));
+
+        final var response = facade.explainRecommendation(sampleDto());
+
+        assertThat(response.summary()).isEqualTo("plain text response (not JSON)");
+        assertThat(response.reasons()).isEmpty();
+    }
+
+    @Test
+    void explainRecommendation_stripsMarkdownCodeFenceFromBedrockResponse() {
+        when(properties.isEnabled()).thenReturn(true);
+        when(promptBuilder.buildRecommendationExplanationPrompt(any())).thenReturn("prompt");
+        final String fencedJson = """
+                ```json
+                {"summary":"요약","reasons":["근거"],"reviewerChecklist":[],"riskLevel":"MEDIUM"}
+                ```""";
+        when(providerFacade.generate(any())).thenReturn(
+                new AiGenerationResponse(fencedJson, "bedrock", "model",
+                        AiServiceStatus.AVAILABLE, false, null, null, null, null, null));
+
+        final var response = facade.explainRecommendation(sampleDto());
+
+        assertThat(response.summary()).isEqualTo("요약");
+        assertThat(response.reasons()).containsExactly("근거");
+        assertThat(response.riskLevel()).isEqualTo("MEDIUM");
+    }
+
+    @Test
+    void summarizeOperations_parsesJsonFieldsFromBedrockResponse() {
+        when(properties.isEnabled()).thenReturn(true);
+        when(recommendationService.listRecommendations(any(), any(), any(), any())).thenReturn(java.util.List.of());
+        when(promptBuilder.buildOpsSummaryPrompt(any())).thenReturn("prompt");
+        final String bedrockJson = """
+                {"summary":"운영 위험 높음","urgentItems":["재고 부족"],
+                "recommendedActions":["즉시 발주"],"riskLevel":"HIGH"}
+                """;
+        when(providerFacade.generate(any())).thenReturn(
+                new AiGenerationResponse(bedrockJson, "bedrock", "model",
+                        AiServiceStatus.AVAILABLE, false, null, null, null, null, null));
+
+        final var response = facade.summarizeOperations(LocalDate.of(2026, 6, 10), 1L, 1L);
+
+        assertThat(response.summary()).isEqualTo("운영 위험 높음");
+        assertThat(response.urgentItems()).containsExactly("재고 부족");
+        assertThat(response.recommendedActions()).containsExactly("즉시 발주");
+        assertThat(response.riskLevel()).isEqualTo("HIGH");
     }
 
     @Test

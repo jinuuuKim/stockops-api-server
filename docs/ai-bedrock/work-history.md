@@ -400,3 +400,21 @@
   - daysOverdue = today.toEpochDay() - etaDate.toEpochDay()
 - Blockers: 없음
 - Verification: mvn test — 전체 테스트 PASS (진행 중)
+
+---
+
+## 2026-06-10 | Phase 2 - Task 2c (BedrockAiFacade JSON 파싱 보완)
+
+- Date: 2026-06-10
+- Phase: Phase 2 보완 — Bedrock 응답 JSON 파싱
+- Summary: BedrockAiFacade.explainRecommendation(), summarizeOperations()가 Bedrock 응답을 그대로 summary에 넣고 reasons/reviewerChecklist/urgentItems/recommendedActions를 하드코딩하고 있던 버그 수정. Bedrock이 요청한 JSON 형식으로 응답하면 올바르게 파싱. 마크다운 코드펜스(```json```) 자동 제거. JSON 파싱 실패 시 raw text fallback.
+- Files changed:
+  - src/main/java/com/stockops/ai/bedrock/BedrockAiFacade.java (parseExplanationResponse, parseOpsSummaryResponse, extractJson, parseStringList, normalizeRiskLevel 헬퍼 추가)
+  - src/test/java/com/stockops/ai/bedrock/BedrockAiFacadeTest.java (JSON 파싱 케이스 4개 추가 — 4→8 tests)
+- Decisions:
+  - extractJson: 마크다운 코드펜스 제거 (일부 모델이 JSON을 ```json으로 감쌈)
+  - parseStringList: null-safe, 비배열 응답에는 빈 리스트 반환
+  - normalizeRiskLevel: LOW/MEDIUM/HIGH 정규화 (한국어 표현도 처리)
+  - JSON 파싱 실패 → log.warn + raw text/빈 리스트로 graceful fallback
+- Blockers: 없음
+- Verification: mvn test — 전체 테스트 PASS (진행 중)
