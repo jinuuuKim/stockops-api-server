@@ -48,6 +48,13 @@ public class User extends BaseEntity {
     @Column(name = "phone", length = 50)
     private String phone;
 
+    /**
+     * Owning store for store-role users (STORE_MANAGER/STORE_STAFF); null for other roles.
+     * Stored as a plain id to keep User lightweight and avoid eager store loading.
+     */
+    @Column(name = "store_id")
+    private Long storeId;
+
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;
@@ -109,6 +116,14 @@ public class User extends BaseEntity {
 
     public void setPhone(final String phone) {
         this.phone = phone;
+    }
+
+    public Long getStoreId() {
+        return this.storeId;
+    }
+
+    public void setStoreId(final Long storeId) {
+        this.storeId = storeId;
     }
 
     public Role getRole() {

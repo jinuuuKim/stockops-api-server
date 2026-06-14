@@ -25,9 +25,11 @@ public class AuthDataLoader implements ApplicationRunner {
     private static final String ADMIN_EMAIL = "admin@stockops.com";
     private static final String ADMIN_ROLE = "ADMIN";
     private static final List<SeedAccount> TEST_ACCOUNTS = List.of(
-            new SeedAccount("manager@stockops.com", "StockOps Manager", "MANAGER"),
-            new SeedAccount("staff@stockops.com", "StockOps Staff", "STAFF"),
-            new SeedAccount("user@stockops.com", "StockOps User", "USER")
+            new SeedAccount("general-admin@stockops.com", "StockOps 일반관리자", "GENERAL_ADMIN"),
+            new SeedAccount("center-manager@stockops.com", "StockOps 센터관리자", "CENTER_MANAGER"),
+            new SeedAccount("warehouse-manager@stockops.com", "StockOps 창고관리자", "WAREHOUSE_MANAGER"),
+            new SeedAccount("store-manager@stockops.com", "StockOps 지점매니저", "STORE_MANAGER"),
+            new SeedAccount("store-staff@stockops.com", "StockOps 지점직원", "STORE_STAFF")
     );
 
     private final UserRepository userRepository;

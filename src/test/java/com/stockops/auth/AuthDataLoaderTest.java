@@ -44,13 +44,16 @@ class AuthDataLoaderTest {
         loader.run(null);
 
         ArgumentCaptor<User> users = ArgumentCaptor.forClass(User.class);
-        verify(userRepository, times(4)).save(users.capture());
+        verify(userRepository, times(6)).save(users.capture());
 
         List<User> created = users.getAllValues();
         assertThat(created).extracting(User::getEmail)
-                .containsExactly("admin@stockops.com", "manager@stockops.com", "staff@stockops.com", "user@stockops.com");
+                .containsExactly("admin@stockops.com", "general-admin@stockops.com",
+                        "center-manager@stockops.com", "warehouse-manager@stockops.com",
+                        "store-manager@stockops.com", "store-staff@stockops.com");
         assertThat(created).extracting(user -> user.getRole().getName())
-                .containsExactly("ADMIN", "MANAGER", "STAFF", "USER");
+                .containsExactly("ADMIN", "GENERAL_ADMIN", "CENTER_MANAGER",
+                        "WAREHOUSE_MANAGER", "STORE_MANAGER", "STORE_STAFF");
         assertThat(created).allMatch(User::isEnabled);
     }
 
@@ -66,7 +69,7 @@ class AuthDataLoaderTest {
         ArgumentCaptor<User> users = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(users.capture());
         assertThat(users.getValue().getEmail()).isEqualTo("admin@stockops.com");
-        verify(userRepository, never()).existsByEmail("manager@stockops.com");
+        verify(userRepository, never()).existsByEmail("store-manager@stockops.com");
     }
 
     @Test
