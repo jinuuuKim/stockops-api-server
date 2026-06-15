@@ -196,21 +196,29 @@ public class AiForecastClient {
 
     /**
      * Request payload for {@code POST /predict}.
+     * The ai-module (FastAPI/Pydantic) expects snake_case {@code product_id}; without the explicit
+     * name Jackson would send {@code productId} and FastAPI rejects the body with HTTP 422.
      *
      * @param productId product identifier
      * @param days      number of days to forecast
      */
-    public record AiForecastRequest(Long productId, int days) {
+    public record AiForecastRequest(
+            @com.fasterxml.jackson.annotation.JsonProperty("product_id") Long productId,
+            int days) {
     }
 
     /**
-     * Response payload from {@code POST /predict}.
+     * Response payload from {@code POST /predict}. The ai-module returns snake_case
+     * {@code product_id}, so map it explicitly.
      *
      * @param productId product identifier
      * @param days      number of forecasted days
      * @param forecast  daily forecast points
      */
-    public record AiForecastResponse(Long productId, int days, List<ForecastPoint> forecast) {
+    public record AiForecastResponse(
+            @com.fasterxml.jackson.annotation.JsonProperty("product_id") Long productId,
+            int days,
+            List<ForecastPoint> forecast) {
 
         /**
          * Single daily forecast point from Prophet.

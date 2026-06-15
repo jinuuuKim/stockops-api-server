@@ -41,9 +41,11 @@ class AiForecastClientTest {
     void getForecast_returnsResponseOnSuccess() {
         mockServer.expect(requestTo("http://localhost:8000/predict"))
                 .andExpect(method(HttpMethod.POST))
+                // The ai-module (FastAPI) requires snake_case product_id; sending productId yields HTTP 422.
+                .andExpect(content().json("{\"product_id\":1,\"days\":7}"))
                 .andRespond(withSuccess(
                         """
-                        {"productId":1,"days":7,"forecast":[{"ds":"2026-06-01","yhat":10.0,"yhat_lower":8.0,"yhat_upper":12.0}]}
+                        {"product_id":1,"days":7,"forecast":[{"ds":"2026-06-01","yhat":10.0,"yhat_lower":8.0,"yhat_upper":12.0}]}
                         """,
                         MediaType.APPLICATION_JSON));
 
@@ -65,7 +67,7 @@ class AiForecastClientTest {
                 .andExpect(header("X-API-Key", "test-secret"))
                 .andRespond(withSuccess(
                         """
-                        {"productId":1,"days":1,"forecast":[{"ds":"2026-06-01","yhat":5.0,"yhat_lower":3.0,"yhat_upper":7.0}]}
+                        {"product_id":1,"days":1,"forecast":[{"ds":"2026-06-01","yhat":5.0,"yhat_lower":3.0,"yhat_upper":7.0}]}
                         """,
                         MediaType.APPLICATION_JSON));
 
