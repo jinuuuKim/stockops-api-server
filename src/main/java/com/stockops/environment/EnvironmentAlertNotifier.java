@@ -10,7 +10,8 @@ import com.stockops.notification.webhook.WebhookPayload;
 import com.stockops.notification.webhook.WebhookService;
 import com.stockops.repository.WarehouseRepository;
 import java.time.Instant;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -52,9 +53,10 @@ public class EnvironmentAlertNotifier {
     }
 
     /**
-     * Delivers the alert to all configured webhook endpoints. Failures propagate so the outbox
-     * sender can record the attempt and retry later (delivery is at-least-once: a partial
-     * failure re-sends the whole notification on the next attempt).
+     * Delivers the alert to the webhook endpoints scoped to the sensor's warehouse and its
+     * center. Warehouse-specific endpoints and center-level (warehouse-unscoped) endpoints both
+     * receive the event; everything else is skipped — this is targeted delivery, not a broadcast.
+     * Failures propagate so the outbox sender can retry (delivery is at-least-once).
      *
      * @param alert the opened/escalated alert
      * @param device the related sensor device (may be null)
@@ -65,30 +67,50 @@ public class EnvironmentAlertNotifier {
     }
 
     private void dispatchWebhooks(final EnvironmentAlert alert, final SensorDevice device) {
-        final List<WebhookEndpointConfig> endpoints = webhookEndpointConfigRepository.findByEnabledTrue();
-        if (endpoints.isEmpty()) {
+        final Long warehouseId = device == null ? null : device.getWarehouseId();
+        if (warehouseId == null) {
+            LOGGER.warn("Alert id={} comes from a sensor with no warehouse; skipping scoped webhook dispatch",
+                    alert.getId());
             return;
         }
+        final Warehouse warehouse = warehouseRepository.findByIdWithCenter(warehouseId).orElse(null);
+        if (warehouse == null) {
+            LOGGER.warn("Warehouse id={} for alert id={} not found; skipping webhook dispatch",
+                    warehouseId, alert.getId());
+            return;
+        }
+        final Long centerId = warehouse.getCenter() == null ? null : warehouse.getCenter().getId();
+
+        // Warehouse-specific endpoints + the center's center-level (warehouse-unscoped) endpoints,
+        // de-duplicated by id.
+        final Map<Long, WebhookEndpointConfig> endpoints = new LinkedHashMap<>();
+        for (final WebhookEndpointConfig endpoint
+                : webhookEndpointConfigRepository.findByWarehouseIdAndEnabledTrue(warehouseId)) {
+            endpoints.put(endpoint.getId(), endpoint);
+        }
+        if (centerId != null) {
+            for (final WebhookEndpointConfig endpoint
+                    : webhookEndpointConfigRepository.findByCenterIdAndWarehouseIdIsNullAndEnabledTrue(centerId)) {
+                endpoints.put(endpoint.getId(), endpoint);
+            }
+        }
+        if (endpoints.isEmpty()) {
+            LOGGER.debug("No enabled webhook endpoint for warehouse={} / center={} (alert id={}); nothing dispatched",
+                    warehouseId, centerId, alert.getId());
+            return;
+        }
+
         final WebhookPayload payload = WebhookPayload.builder()
                 .eventType(EVENT_TYPE)
                 .message(alert.getMessage())
                 .severity(toWebhookSeverity(alert.getSeverity()))
-                .location(resolveWarehouseName(device))
+                .location(warehouse.getName())
                 .alertType(alert.getAlertType())
                 .timestamp(Instant.now())
                 .build();
-        for (final WebhookEndpointConfig endpoint : endpoints) {
+        for (final WebhookEndpointConfig endpoint : endpoints.values()) {
             webhookService.send(endpoint.getProviderType().name(), endpoint.getWebhookUrl(), payload);
         }
-    }
-
-    private String resolveWarehouseName(final SensorDevice device) {
-        if (device == null || device.getWarehouseId() == null) {
-            return null;
-        }
-        return warehouseRepository.findById(device.getWarehouseId())
-                .map(Warehouse::getName)
-                .orElse(null);
     }
 
     private WebhookPayload.Severity toWebhookSeverity(final AlertSeverity severity) {

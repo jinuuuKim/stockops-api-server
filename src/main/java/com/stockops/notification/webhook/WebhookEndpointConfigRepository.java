@@ -40,6 +40,15 @@ public interface WebhookEndpointConfigRepository extends JpaRepository<WebhookEn
     List<WebhookEndpointConfig> findByWarehouseIdAndEnabledTrue(Long warehouseId);
 
     /**
+     * Finds enabled center-level endpoints (no warehouse scope) for a given center.
+     * These receive events from any warehouse in the center, alongside warehouse-specific endpoints.
+     *
+     * @param centerId center identifier
+     * @return list of enabled center-level endpoint configs
+     */
+    List<WebhookEndpointConfig> findByCenterIdAndWarehouseIdIsNullAndEnabledTrue(Long centerId);
+
+    /**
      * Finds all enabled endpoints for a specific provider type.
      *
      * @param providerType webhook provider type
