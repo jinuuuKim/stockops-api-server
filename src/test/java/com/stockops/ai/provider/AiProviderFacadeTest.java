@@ -4,6 +4,7 @@ import com.stockops.ai.bedrock.BedrockGenerationProvider;
 import com.stockops.ai.gcp.VertexAiGenerationProvider;
 import com.stockops.ai.gcp.VertexAiProperties;
 import com.stockops.ai.metrics.AiCallMetrics;
+import io.micrometer.observation.ObservationRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,7 +26,8 @@ class AiProviderFacadeTest {
 
     @BeforeEach
     void setUp() {
-        facade = new AiProviderFacade(bedrockProvider, vertexProvider, vertexProperties, aiCallMetrics);
+        facade = new AiProviderFacade(
+                bedrockProvider, vertexProvider, vertexProperties, aiCallMetrics, ObservationRegistry.NOOP);
     }
 
     @Test

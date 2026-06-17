@@ -1,10 +1,12 @@
 package com.stockops.ai.forecast;
 
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.annotation.Observed;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.time.Instant;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -39,6 +41,7 @@ public class AiForecastClient {
 
     private final RestTemplate restTemplate;
     private final AiForecastProperties properties;
+    private final ObservationRegistry observationRegistry;
 
     private final Object circuitLock = new Object();
     private CircuitState circuitState = CircuitState.CLOSED;
@@ -57,8 +60,11 @@ public class AiForecastClient {
      * @param properties AI service configuration (URL, timeouts, circuit-breaker)
      * @param restTemplateBuilder Spring-managed builder carrying observation instrumentation
      */
-    public AiForecastClient(final AiForecastProperties properties, final RestTemplateBuilder restTemplateBuilder) {
+    public AiForecastClient(final AiForecastProperties properties,
+                            final RestTemplateBuilder restTemplateBuilder,
+                            final ObservationRegistry observationRegistry) {
         this.properties = properties;
+        this.observationRegistry = observationRegistry;
         this.restTemplate = restTemplateBuilder
                 .setConnectTimeout(properties.getConnectTimeout())
                 .setReadTimeout(properties.getReadTimeout())
@@ -74,7 +80,12 @@ public class AiForecastClient {
      */
     @Observed(name = "ai.forecast.client", contextualName = "ai-forecast-predict")
     public AiForecastResponse getForecast(final Long productId, final int days) {
+        tagCurrentObservation("product.id", productId);
+        tagCurrentObservation("forecast.days", days);
+        tagCurrentObservation("forecast.mode", "single");
+        tagCurrentObservation("circuit.state", circuitState.name().toLowerCase(java.util.Locale.ROOT));
         if (isCircuitOpen()) {
+            tagCurrentObservation("forecast.outcome", "circuit_open");
             log.warn("AI forecast circuit breaker is OPEN; skipping request for productId={}", productId);
             return null;
         }
@@ -90,17 +101,24 @@ public class AiForecastClient {
         try {
             final AiForecastResponse response = restTemplate.postForObject(url, request, AiForecastResponse.class);
             recordSuccess();
+            tagCurrentObservation("forecast.outcome", "success");
+            tagCurrentObservation("forecast.points", response == null || response.forecast() == null
+                    ? 0 : response.forecast().size());
             return response;
         } catch (final RestClientResponseException e) {
+            tagCurrentObservation("forecast.outcome", "http_error");
+            tagCurrentObservation("http.status_code", e.getStatusCode().value());
             log.error("AI forecast HTTP error for productId={}: status={}, body={}",
                     productId, e.getStatusCode(), e.getResponseBodyAsString(), e);
             recordFailure();
             return null;
         } catch (final ResourceAccessException e) {
+            tagCurrentObservation("forecast.outcome", "connection_error");
             log.error("AI forecast timeout/connection error for productId={}: {}", productId, e.getMessage());
             recordFailure();
             return null;
         } catch (final Exception e) {
+            tagCurrentObservation("forecast.outcome", "error");
             log.error("AI forecast unexpected error for productId={}", productId, e);
             recordFailure();
             return null;
@@ -116,7 +134,12 @@ public class AiForecastClient {
      */
     @Observed(name = "ai.forecast.client.bulk", contextualName = "ai-forecast-predict-bulk")
     public List<AiForecastResponse> getBulkForecasts(final List<Long> productIds, final int days) {
+        tagCurrentObservation("forecast.mode", "bulk");
+        tagCurrentObservation("forecast.product_count", productIds.size());
+        tagCurrentObservation("forecast.days", days);
+        tagCurrentObservation("circuit.state", circuitState.name().toLowerCase(java.util.Locale.ROOT));
         if (isCircuitOpen()) {
+            tagCurrentObservation("forecast.outcome", "circuit_open");
             log.warn("AI forecast circuit breaker is OPEN; skipping bulk request for {} products", productIds.size());
             return null;
         }
@@ -137,20 +160,34 @@ public class AiForecastClient {
             final ResponseEntity<List<AiForecastResponse>> responseEntity = restTemplate.exchange(
                     url, HttpMethod.POST, request, new ParameterizedTypeReference<>() {});
             recordSuccess();
+            final List<AiForecastResponse> body = responseEntity.getBody();
+            tagCurrentObservation("forecast.outcome", "success");
+            tagCurrentObservation("forecast.response_count", body == null ? 0 : body.size());
             return responseEntity.getBody();
         } catch (final RestClientResponseException e) {
+            tagCurrentObservation("forecast.outcome", "http_error");
+            tagCurrentObservation("http.status_code", e.getStatusCode().value());
             log.error("AI bulk forecast HTTP error: status={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString(), e);
             recordFailure();
             return null;
         } catch (final ResourceAccessException e) {
+            tagCurrentObservation("forecast.outcome", "connection_error");
             log.error("AI bulk forecast timeout/connection error: {}", e.getMessage());
             recordFailure();
             return null;
         } catch (final Exception e) {
+            tagCurrentObservation("forecast.outcome", "error");
             log.error("AI bulk forecast unexpected error", e);
             recordFailure();
             return null;
+        }
+    }
+
+    private void tagCurrentObservation(final String key, final Object value) {
+        final Observation current = observationRegistry.getCurrentObservation();
+        if (current != null && value != null) {
+            current.highCardinalityKeyValue(key, String.valueOf(value));
         }
     }
 

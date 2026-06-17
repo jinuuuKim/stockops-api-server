@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,7 +34,7 @@ class AiForecastClientTest {
         properties.setReadTimeout(Duration.ofSeconds(5));
         properties.setCircuitBreakerFailureThreshold(3);
         properties.setCircuitBreakerCooldown(Duration.ofSeconds(30));
-        client = new AiForecastClient(properties, new RestTemplateBuilder());
+        client = new AiForecastClient(properties, new RestTemplateBuilder(), ObservationRegistry.NOOP);
         mockServer = MockRestServiceServer.createServer(extractRestTemplate(client));
     }
 

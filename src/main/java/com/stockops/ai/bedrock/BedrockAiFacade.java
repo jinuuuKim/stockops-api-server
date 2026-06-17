@@ -22,6 +22,7 @@ import com.stockops.repository.PurchaseOrderShipmentRepository;
 import com.stockops.service.EnvironmentQueryService;
 import com.stockops.service.ai.AIRecommendationService;
 import com.stockops.service.ai.AISuggestionService;
+import io.micrometer.observation.annotation.Observed;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -86,6 +87,7 @@ public class BedrockAiFacade {
             key = "#recommendation.id()",
             condition = "#recommendation != null && #recommendation.id() != null",
             unless = "#result == null")
+    @Observed(name = "ai.bedrock.explain_recommendation", contextualName = "bedrock-explain-recommendation")
     public BedrockRecommendationExplanationResponse explainRecommendation(final AIRecommendationDTO recommendation) {
         if (!properties.isEnabled()) {
             return fallbackExplanation(recommendation, "Bedrock is disabled.");
@@ -108,6 +110,7 @@ public class BedrockAiFacade {
             key = "#businessDate.toString() + '-' + (#centerId ?: 'all') + '-' + (#warehouseId ?: 'all')",
             condition = "#businessDate != null",
             unless = "#result == null")
+    @Observed(name = "ai.bedrock.ops_summary", contextualName = "bedrock-ops-summary")
     public BedrockOpsSummaryResponse summarizeOperations(final LocalDate businessDate,
                                                          final Long centerId,
                                                          final Long warehouseId) {
@@ -137,10 +140,12 @@ public class BedrockAiFacade {
                 opsFacts.toSourceCounts(), opsFacts.buildConfidenceCaveat());
     }
 
+    @Observed(name = "ai.bedrock.rag_query", contextualName = "bedrock-rag-query")
     public BedrockRagQueryResponse queryKnowledgeBase(final BedrockRagQueryRequest request) {
         return agentAdapter.retrieveAndGenerate(request);
     }
 
+    @Observed(name = "ai.bedrock.agent_invoke", contextualName = "bedrock-agent-invoke")
     public BedrockAgentInvokeResponse invokeAgent(final BedrockAgentInvokeRequest request) {
         final BedrockAgentInvokeResponse response = agentAdapter.invokeAgent(request);
         if (response.actionSuggested()
