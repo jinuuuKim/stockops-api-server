@@ -11,11 +11,12 @@ import com.stockops.notification.webhook.WebhookPayload;
 import com.stockops.notification.webhook.WebhookProvider;
 import com.stockops.notification.webhook.WebhookProviderRegistry;
 import com.stockops.notification.webhook.WebhookService;
+import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,8 +32,12 @@ class WebhookServiceTest {
     @Mock
     private NotificationDeliveryLogger deliveryLogger;
 
-    @InjectMocks
     private WebhookService webhookService;
+
+    @BeforeEach
+    void setUp() {
+        webhookService = new WebhookService(registry, deliveryLogger, ObservationRegistry.NOOP);
+    }
 
     @Test
     void sendWithBlankUrlLogsOnly() {

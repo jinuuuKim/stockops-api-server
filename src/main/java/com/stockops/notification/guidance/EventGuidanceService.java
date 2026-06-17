@@ -7,6 +7,8 @@ import com.stockops.ai.bedrock.dto.BedrockRagQueryResponse;
 import com.stockops.ai.provider.AiGenerationRequest;
 import com.stockops.ai.provider.AiGenerationResponse;
 import com.stockops.ai.provider.AiProviderFacade;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import java.util.List;
 import java.util.Locale;
 import org.slf4j.Logger;
@@ -51,13 +53,16 @@ public class EventGuidanceService {
     private final BedrockAgentRuntimeClientAdapter ragAdapter;
     private final AiProviderFacade aiProviderFacade;
     private final BedrockAiProperties bedrockProperties;
+    private final ObservationRegistry observationRegistry;
 
     public EventGuidanceService(final BedrockAgentRuntimeClientAdapter ragAdapter,
                                 final AiProviderFacade aiProviderFacade,
-                                final BedrockAiProperties bedrockProperties) {
+                                final BedrockAiProperties bedrockProperties,
+                                final ObservationRegistry observationRegistry) {
         this.ragAdapter = ragAdapter;
         this.aiProviderFacade = aiProviderFacade;
         this.bedrockProperties = bedrockProperties;
+        this.observationRegistry = observationRegistry;
     }
 
     /**
@@ -69,6 +74,28 @@ public class EventGuidanceService {
      */
     @Cacheable(cacheNames = "ai::event-guidance", key = "(#alertType ?: 'NONE') + '|' + (#severity ?: 'NONE')")
     public EventGuidance guidanceFor(final String alertType, final String severity) {
+        // Manual span: only runs on a cache miss (the @Cacheable proxy short-circuits hits), so it
+        // measures the actual KB/AI generation latency, tagged with the type/severity and the source
+        // (KNOWLEDGE_BASE / AI_FORMATTED / FALLBACK) of the produced guidance.
+        final Observation observation = Observation.createNotStarted(
+                        "notification.event_guidance", observationRegistry)
+                .contextualName("event-guidance")
+                .lowCardinalityKeyValue("alert_type", alertType == null ? "unknown" : alertType)
+                .lowCardinalityKeyValue("severity", severity == null ? "unknown" : severity);
+        observation.start();
+        try (Observation.Scope ignored = observation.openScope()) {
+            final EventGuidance result = computeGuidance(alertType, severity);
+            observation.lowCardinalityKeyValue("source", result.source().name());
+            return result;
+        } catch (final RuntimeException e) {
+            observation.error(e);
+            throw e;
+        } finally {
+            observation.stop();
+        }
+    }
+
+    private EventGuidance computeGuidance(final String alertType, final String severity) {
         if (!knowledgeBaseConfigured()) {
             LOGGER.debug("Knowledge Base not configured; using fallback guidance for alertType={}", alertType);
             return fallback(alertType);
