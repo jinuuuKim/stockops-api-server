@@ -13,6 +13,7 @@ import com.stockops.ai.bedrock.agent.AgentToolDispatcher;
 import com.stockops.ai.bedrock.agent.AgentToolResult;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
+import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,7 +58,7 @@ class BedrockConverseOrchestratorTest {
         properties.setEnabled(true);
         properties.setModelId("amazon.nova-micro-v1:0");
         orchestrator = new BedrockConverseOrchestrator(
-                clientFactory, properties, new AgentToolCatalog(), toolDispatcher);
+                clientFactory, properties, new AgentToolCatalog(), toolDispatcher, ObservationRegistry.NOOP);
     }
 
     @Test

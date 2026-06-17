@@ -30,7 +30,7 @@ public class IntradayForecastProperties {
     /** Cron for the daily sweep that flips past-window open proposals to EXPIRED, in {@link #businessZone}. */
     private String expiryCron = "0 30 0 * * ?";
 
-    /** Optional forecast model id (e.g. "gemini"); blank uses the default statistical model. */
+    /** Optional forecast model id of a registered ForecastModel; blank uses the default statistical model. */
     private String forecastModel = "";
 
     private Notify notify = new Notify();

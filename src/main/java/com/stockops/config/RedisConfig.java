@@ -84,6 +84,7 @@ public class RedisConfig {
         RedisCacheConfiguration aiConfig = defaultConfig.entryTtl(Duration.ofSeconds(300));
         RedisCacheConfiguration aiExplanationConfig = defaultConfig.entryTtl(Duration.ofHours(1));
         RedisCacheConfiguration aiOpsSummaryConfig = defaultConfig.entryTtl(Duration.ofHours(24));
+        RedisCacheConfiguration aiEventGuidanceConfig = defaultConfig.entryTtl(Duration.ofHours(24));
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
@@ -93,6 +94,7 @@ public class RedisConfig {
                 .withCacheConfiguration("ai::recommendations", aiConfig)
                 .withCacheConfiguration("ai::recommendation-explanation", aiExplanationConfig)
                 .withCacheConfiguration("ai::ops-summary", aiOpsSummaryConfig)
+                .withCacheConfiguration("ai::event-guidance", aiEventGuidanceConfig)
                 .build();
     }
 

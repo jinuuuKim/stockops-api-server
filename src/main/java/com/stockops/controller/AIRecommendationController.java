@@ -56,7 +56,7 @@ public class AIRecommendationController {
      *
      * @param businessDate business date to generate recommendations for
      * @param model optional forecast model selector (default: "statistical")
-     * @param provider optional external AI provider selector (e.g. "gemini"); takes precedence over {@code model}
+     * @param provider optional external AI provider selector (a registered ExternalAiProvider id); takes precedence over {@code model}
      * @return 200 OK when generation completes
      */
     @PostMapping("/generate")

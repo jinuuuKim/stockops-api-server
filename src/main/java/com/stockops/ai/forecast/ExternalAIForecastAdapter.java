@@ -6,7 +6,7 @@ import java.math.RoundingMode;
 import org.springframework.stereotype.Service;
 
 /**
- * Stub adapter for future external AI forecast models (Gemini, OpenAI, etc.).
+ * Stub adapter for future external AI forecast models (e.g. OpenAI, etc.).
  * <p>
  * Returns a placeholder result with {@code modelVersion = "external-stub"}.
  * Does NOT call any live API. Replace the body with a real adapter when

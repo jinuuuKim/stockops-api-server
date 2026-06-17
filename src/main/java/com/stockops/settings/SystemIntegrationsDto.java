@@ -2,8 +2,7 @@ package com.stockops.settings;
 
 public record SystemIntegrationsDto(
         BedrockIntegration bedrock,
-        VertexIntegration vertex,
-        GeminiIntegration gemini
+        VertexIntegration vertex
 ) {
 
     public record BedrockIntegration(
@@ -19,11 +18,5 @@ public record SystemIntegrationsDto(
             String location,
             String modelId,
             boolean hasCredentials
-    ) {}
-
-    public record GeminiIntegration(
-            boolean enabled,
-            String modelName,
-            boolean hasApiKey
     ) {}
 }

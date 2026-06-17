@@ -46,7 +46,7 @@ public class ExternalAiProviderRegistry {
     /**
      * Looks up a provider by its identifier.
      *
-     * @param providerId the provider id string (e.g. "gemini")
+     * @param providerId the provider id string (e.g. "openai")
      * @return matching provider, or empty if not registered
      */
     public Optional<ExternalAiProvider> getProvider(final String providerId) {

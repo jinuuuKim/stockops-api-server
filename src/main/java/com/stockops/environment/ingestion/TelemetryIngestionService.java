@@ -168,11 +168,19 @@ public class TelemetryIngestionService {
      */
     private void openOrEscalateAlert(final SensorDevice device, final AlertSeverity severity,
                                      final SensimulPayload payload) {
-        openOrEscalateAlert(device, severity, resolveAlertType(payload), buildMessage(device, payload));
+        final String unit = StringUtils.hasText(payload.unit()) ? payload.unit() : device.getUnit();
+        openOrEscalateAlert(device, severity, resolveAlertType(payload), buildMessage(device, payload),
+                payload.value(), unit);
     }
 
     private void openOrEscalateAlert(final SensorDevice device, final AlertSeverity severity,
                                      final String alertType, final String message) {
+        openOrEscalateAlert(device, severity, alertType, message, null, null);
+    }
+
+    private void openOrEscalateAlert(final SensorDevice device, final AlertSeverity severity,
+                                     final String alertType, final String message,
+                                     final Double readingValue, final String readingUnit) {
         final Optional<EnvironmentAlert> active = environmentAlertRepository
                 .findFirstBySensorDeviceIdAndResolvedAtIsNullAndAcknowledgedFalseOrderByCreatedAtDesc(device.getId());
 
@@ -182,6 +190,8 @@ public class TelemetryIngestionService {
             if (previousSeverity != severity) {
                 alert.setSeverity(severity);
                 alert.setMessage(message);
+                alert.setReadingValue(readingValue);
+                alert.setReadingUnit(readingUnit);
                 final EnvironmentAlert escalated = environmentAlertRepository.save(alert);
                 LOGGER.debug("Updated active alert severity for sensorDeviceId={} to {}", device.getId(), severity);
                 if (previousSeverity == AlertSeverity.WARNING && severity == AlertSeverity.CRITICAL) {
@@ -197,6 +207,8 @@ public class TelemetryIngestionService {
         alert.setAlertType(alertType);
         alert.setSeverity(severity);
         alert.setMessage(message);
+        alert.setReadingValue(readingValue);
+        alert.setReadingUnit(readingUnit);
         alert.setAcknowledged(false);
         final EnvironmentAlert opened = environmentAlertRepository.save(alert);
         LOGGER.debug("Opened {} alert for sensorDeviceId={}", severity, device.getId());

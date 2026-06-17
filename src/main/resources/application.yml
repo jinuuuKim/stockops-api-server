@@ -157,20 +157,20 @@ stockops:
       actionable-days: ${STOCKOPS_AI_INTRADAY_ACTIONABLE_DAYS:3}
       # Daily sweep flipping past-window open proposals to EXPIRED.
       expiry-cron: ${STOCKOPS_AI_INTRADAY_EXPIRY_CRON:0 30 0 * * ?}
-      # Optional forecast model id (e.g. "gemini"); blank uses the statistical model.
+      # Optional forecast model id of a registered ForecastModel; blank uses the statistical model.
       forecast-model: ${STOCKOPS_AI_INTRADAY_FORECAST_MODEL:}
       notify:
         enabled: ${STOCKOPS_AI_INTRADAY_NOTIFY_ENABLED:false}
         min-recommended-quantity: ${STOCKOPS_AI_INTRADAY_NOTIFY_MIN_QTY:1}
         max-items: ${STOCKOPS_AI_INTRADAY_NOTIFY_MAX_ITEMS:10}
-    gemini:
-      api-key: ${GEMINI_API_KEY:}
-      enabled: ${GEMINI_ENABLED:false}
-      model-name: gemini-pro
-      max-tokens: 1024
     bedrock:
       enabled: ${STOCKOPS_BEDROCK_ENABLED:false}
       region: ${STOCKOPS_BEDROCK_REGION:ap-northeast-2}
+      # Dedicated Bedrock credentials. Use these (NOT AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) so
+      # Bedrock can target a different AWS account than SQS ingestion, which stays on IRSA via the
+      # default credential chain. Leave blank to let Bedrock use the default chain too.
+      access-key-id: ${STOCKOPS_BEDROCK_AWS_ACCESS_KEY_ID:}
+      secret-access-key: ${STOCKOPS_BEDROCK_AWS_SECRET_ACCESS_KEY:}
       model-id: ${STOCKOPS_BEDROCK_MODEL_ID:}
       inference-profile-arn: ${STOCKOPS_BEDROCK_INFERENCE_PROFILE_ARN:}
       knowledge-base-id: ${STOCKOPS_BEDROCK_KNOWLEDGE_BASE_ID:}

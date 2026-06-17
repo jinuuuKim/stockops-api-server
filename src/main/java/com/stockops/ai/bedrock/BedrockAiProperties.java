@@ -10,6 +10,8 @@ public class BedrockAiProperties {
 
     private boolean enabled;
     private String region = "ap-northeast-2";
+    private String accessKeyId = "";
+    private String secretAccessKey = "";
     private String modelId = "";
     private String inferenceProfileArn = "";
     private String knowledgeBaseId = "";
@@ -28,6 +30,10 @@ public class BedrockAiProperties {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public String getRegion() { return region; }
     public void setRegion(String region) { this.region = region; }
+    public String getAccessKeyId() { return accessKeyId; }
+    public void setAccessKeyId(String accessKeyId) { this.accessKeyId = accessKeyId; }
+    public String getSecretAccessKey() { return secretAccessKey; }
+    public void setSecretAccessKey(String secretAccessKey) { this.secretAccessKey = secretAccessKey; }
     public String getModelId() { return modelId; }
     public void setModelId(String modelId) { this.modelId = modelId; }
     public String getInferenceProfileArn() { return inferenceProfileArn; }
@@ -57,6 +63,22 @@ public class BedrockAiProperties {
 
     public String generationModelReference() {
         return inferenceProfileArn == null || inferenceProfileArn.isBlank() ? modelId : inferenceProfileArn;
+    }
+
+    /**
+     * Returns whether explicit static credentials are configured for Bedrock.
+     *
+     * <p>When true, Bedrock clients use these keys instead of the default credential chain
+     * (IRSA / env vars), so Bedrock can target a different AWS account than the rest of the
+     * service (e.g. SQS ingestion via IRSA in the deployment account, Bedrock via a personal
+     * account where model access is enabled). When false, Bedrock falls back to the default
+     * chain.
+     *
+     * @return true when both access key id and secret access key are set
+     */
+    public boolean hasStaticCredentials() {
+        return accessKeyId != null && !accessKeyId.isBlank()
+                && secretAccessKey != null && !secretAccessKey.isBlank();
     }
 
     /**

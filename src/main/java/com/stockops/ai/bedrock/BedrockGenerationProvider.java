@@ -9,7 +9,6 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
 import software.amazon.awssdk.services.bedrockruntime.model.ConversationRole;
@@ -25,9 +24,12 @@ public class BedrockGenerationProvider implements AiGenerationProvider {
     private static final Logger log = LoggerFactory.getLogger(BedrockGenerationProvider.class);
 
     private final BedrockAiProperties properties;
+    private final BedrockRuntimeClientFactory clientFactory;
 
-    public BedrockGenerationProvider(final BedrockAiProperties properties) {
+    public BedrockGenerationProvider(final BedrockAiProperties properties,
+                                     final BedrockRuntimeClientFactory clientFactory) {
         this.properties = properties;
+        this.clientFactory = clientFactory;
     }
 
     @Override
@@ -57,9 +59,7 @@ public class BedrockGenerationProvider implements AiGenerationProvider {
             throw new IllegalStateException("Bedrock model reference is not configured");
         }
 
-        try (BedrockRuntimeClient client = BedrockRuntimeClient.builder()
-                .region(Region.of(properties.getRegion()))
-                .build()) {
+        try (BedrockRuntimeClient client = clientFactory.create(properties.getRegion())) {
             final ConverseRequest request = ConverseRequest.builder()
                     .modelId(modelReference)
                     .system(List.of(SystemContentBlock.builder().text(generationRequest.systemPrompt()).build()))

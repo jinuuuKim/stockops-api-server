@@ -8,6 +8,9 @@ import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryRequest;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryResponse;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
+import io.micrometer.observation.annotation.Observed;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,12 +21,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient;
 import software.amazon.awssdk.services.bedrockagentruntime.model.ContentBody;
 import software.amazon.awssdk.services.bedrockagentruntime.model.FunctionInvocationInput;
 import software.amazon.awssdk.services.bedrockagentruntime.model.FunctionResult;
+import software.amazon.awssdk.services.bedrockagentruntime.model.GenerationConfiguration;
+import software.amazon.awssdk.services.bedrockagentruntime.model.GuardrailConfiguration;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvocationInputMember;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvocationResultMember;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
@@ -63,51 +67,89 @@ public class BedrockAgentRuntimeClientAdapter {
     private final BedrockAiProperties properties;
     private final AgentToolDispatcher toolDispatcher;
     private final BedrockAgentRuntimeClientFactory clientFactory;
+    private final ObservationRegistry observationRegistry;
 
     public BedrockAgentRuntimeClientAdapter(final BedrockAiProperties properties,
                                             final AgentToolDispatcher toolDispatcher,
-                                            final BedrockAgentRuntimeClientFactory clientFactory) {
+                                            final BedrockAgentRuntimeClientFactory clientFactory,
+                                            final ObservationRegistry observationRegistry) {
         this.properties = properties;
         this.toolDispatcher = toolDispatcher;
         this.clientFactory = clientFactory;
+        this.observationRegistry = observationRegistry;
     }
 
+    @Observed(name = "ai.bedrock.rag_retrieve_generate", contextualName = "bedrock-rag-retrieve-generate")
     public BedrockRagQueryResponse retrieveAndGenerate(final BedrockRagQueryRequest request) {
         if (!properties.isEnabled()
                 || properties.getKnowledgeBaseId() == null
                 || properties.getKnowledgeBaseId().isBlank()) {
+            tagCurrentObservation("rag.outcome", "not_configured");
             return new BedrockRagQueryResponse(
                     "Knowledge Base is not configured.",
                     List.of(),
                     null);
         }
 
+        // Records whether the scope/safety guardrail is active on this free-text RAG call so the
+        // trace shows it was not silently bypassed. Tagged before the call so it is present even
+        // when the request fails.
+        tagCurrentObservation("guardrail.applied", properties.hasGuardrail());
+
         final String modelArn = properties.generationModelReference();
-        try (BedrockAgentRuntimeClient client = BedrockAgentRuntimeClient.builder()
-                .region(Region.of(properties.getRegion()))
-                .build()) {
+        try (BedrockAgentRuntimeClient client = clientFactory.createSyncClient(properties.getRegion())) {
+            // Scope/safety guardrail also covers this RAG path, which accepts free-text user
+            // questions (e.g. /api/v1/ai/bedrock/rag/query). Without it, users could bypass the
+            // guardrail attached to the Converse assistant. Attached only when both id+version are set.
+            final KnowledgeBaseRetrieveAndGenerateConfiguration.Builder knowledgeBaseConfig =
+                    KnowledgeBaseRetrieveAndGenerateConfiguration.builder()
+                            .knowledgeBaseId(properties.getKnowledgeBaseId())
+                            .modelArn(modelArn);
+            if (properties.hasGuardrail()) {
+                knowledgeBaseConfig.generationConfiguration(GenerationConfiguration.builder()
+                        .guardrailConfiguration(GuardrailConfiguration.builder()
+                                .guardrailId(properties.getGuardrailId())
+                                .guardrailVersion(properties.getGuardrailVersion())
+                                .build())
+                        .build());
+            }
             final RetrieveAndGenerateRequest ragRequest = RetrieveAndGenerateRequest.builder()
                     .input(RetrieveAndGenerateInput.builder().text(request.question()).build())
                     .retrieveAndGenerateConfiguration(RetrieveAndGenerateConfiguration.builder()
                             .type(RetrieveAndGenerateType.KNOWLEDGE_BASE)
-                            .knowledgeBaseConfiguration(KnowledgeBaseRetrieveAndGenerateConfiguration.builder()
-                                    .knowledgeBaseId(properties.getKnowledgeBaseId())
-                                    .modelArn(modelArn)
-                                    .build())
+                            .knowledgeBaseConfiguration(knowledgeBaseConfig.build())
                             .build())
                     .build();
             final RetrieveAndGenerateResponse response = client.retrieveAndGenerate(ragRequest);
             final List<String> citations = extractCitations(response);
+            tagCurrentObservation("rag.outcome", "success");
+            tagCurrentObservation("rag.citation_count", citations.size());
             return new BedrockRagQueryResponse(
                     response.output().text(),
                     citations,
                     response.sessionId());
         } catch (final Exception e) {
+            tagCurrentObservation("rag.outcome", "error");
             log.error("Bedrock RAG query failed: {}", e.getMessage(), e);
             return new BedrockRagQueryResponse(
                     "Knowledge Base 조회 중 오류가 발생했습니다.",
                     List.of(),
                     null);
+        }
+    }
+
+    /**
+     * Attaches a key/value tag to the current observation (the {@code @Observed} span), when one is
+     * active. Mirrors the pattern in {@code AiForecastClient}: no-op outside a trace context
+     * (e.g. unit tests without AOP weaving) so callers stay clean.
+     *
+     * @param key tag key
+     * @param value tag value; ignored when null
+     */
+    private void tagCurrentObservation(final String key, final Object value) {
+        final Observation current = observationRegistry.getCurrentObservation();
+        if (current != null && value != null) {
+            current.highCardinalityKeyValue(key, String.valueOf(value));
         }
     }
 

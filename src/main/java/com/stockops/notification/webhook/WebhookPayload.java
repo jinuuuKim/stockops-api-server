@@ -46,7 +46,40 @@ public record WebhookPayload(
         /**
          * Additional key-value details specific to the event.
          */
-        Map<String, String> details
+        Map<String, String> details,
+        /**
+         * Korean responsible-role label shown in the card header ("권한"), e.g. "창고관리자".
+         */
+        String permissionLabel,
+        /**
+         * Korean alert name ("알림명"), e.g. "센서 임계치 알림".
+         */
+        String alertName,
+        /**
+         * Korean event title line ("이벤트명"), e.g. "[서울 강서 냉동/냉장 창고] 온도센서 임계치 초과".
+         */
+        String eventTitle,
+        /**
+         * Configured / threshold value ("설정값"), pre-formatted with unit if any.
+         */
+        String configuredValue,
+        /**
+         * Current measured value ("현재 값"), pre-formatted with unit if any.
+         */
+        String currentValue,
+        /**
+         * Status label ("상태"), e.g. "초과", "미달", "정상".
+         */
+        String statusLabel,
+        /**
+         * AI/Knowledge-Base sourced remediation guidance ("상세 설명").
+         */
+        String guidance,
+        /**
+         * Provenance of the guidance for delivery auditing (e.g. "KNOWLEDGE_BASE", "FALLBACK",
+         * or a KB citation). Not rendered on the card; recorded in the delivery log.
+         */
+        String guidanceSource
 ) {
     /**
      * Severity levels matching environment alert severities.
@@ -77,6 +110,14 @@ public record WebhookPayload(
         private String centerName;
         private String warehouseName;
         private Map<String, String> details = Map.of();
+        private String permissionLabel;
+        private String alertName;
+        private String eventTitle;
+        private String configuredValue;
+        private String currentValue;
+        private String statusLabel;
+        private String guidance;
+        private String guidanceSource;
 
         public Builder eventType(String eventType) {
             this.eventType = eventType;
@@ -123,10 +164,52 @@ public record WebhookPayload(
             return this;
         }
 
+        public Builder permissionLabel(String permissionLabel) {
+            this.permissionLabel = permissionLabel;
+            return this;
+        }
+
+        public Builder alertName(String alertName) {
+            this.alertName = alertName;
+            return this;
+        }
+
+        public Builder eventTitle(String eventTitle) {
+            this.eventTitle = eventTitle;
+            return this;
+        }
+
+        public Builder configuredValue(String configuredValue) {
+            this.configuredValue = configuredValue;
+            return this;
+        }
+
+        public Builder currentValue(String currentValue) {
+            this.currentValue = currentValue;
+            return this;
+        }
+
+        public Builder statusLabel(String statusLabel) {
+            this.statusLabel = statusLabel;
+            return this;
+        }
+
+        public Builder guidance(String guidance) {
+            this.guidance = guidance;
+            return this;
+        }
+
+        public Builder guidanceSource(String guidanceSource) {
+            this.guidanceSource = guidanceSource;
+            return this;
+        }
+
         public WebhookPayload build() {
             return new WebhookPayload(
                     eventType, message, severity, location, timestamp,
-                    alertType, centerName, warehouseName, details
+                    alertType, centerName, warehouseName, details,
+                    permissionLabel, alertName, eventTitle,
+                    configuredValue, currentValue, statusLabel, guidance, guidanceSource
             );
         }
     }

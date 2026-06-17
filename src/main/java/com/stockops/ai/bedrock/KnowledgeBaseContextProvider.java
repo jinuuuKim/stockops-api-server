@@ -4,7 +4,6 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient;
 import software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseQuery;
 import software.amazon.awssdk.services.bedrockagentruntime.model.KnowledgeBaseRetrievalConfiguration;
@@ -30,9 +29,12 @@ public class KnowledgeBaseContextProvider {
     private static final int MAX_SNIPPET_CHARS = 800;
 
     private final BedrockAiProperties properties;
+    private final BedrockAgentRuntimeClientFactory clientFactory;
 
-    public KnowledgeBaseContextProvider(final BedrockAiProperties properties) {
+    public KnowledgeBaseContextProvider(final BedrockAiProperties properties,
+                                        final BedrockAgentRuntimeClientFactory clientFactory) {
         this.properties = properties;
+        this.clientFactory = clientFactory;
     }
 
     /**
@@ -48,9 +50,7 @@ public class KnowledgeBaseContextProvider {
                 || query == null || query.isBlank()) {
             return null;
         }
-        try (BedrockAgentRuntimeClient client = BedrockAgentRuntimeClient.builder()
-                .region(Region.of(properties.getRegion()))
-                .build()) {
+        try (BedrockAgentRuntimeClient client = clientFactory.createSyncClient(properties.getRegion())) {
             final RetrieveRequest request = RetrieveRequest.builder()
                     .knowledgeBaseId(properties.getKnowledgeBaseId())
                     .retrievalQuery(KnowledgeBaseQuery.builder().text(query).build())

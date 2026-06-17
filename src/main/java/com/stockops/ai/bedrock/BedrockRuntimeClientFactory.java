@@ -14,6 +14,12 @@ import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 @Component
 public class BedrockRuntimeClientFactory {
 
+    private final BedrockCredentialsProvider credentialsProvider;
+
+    public BedrockRuntimeClientFactory(final BedrockCredentialsProvider credentialsProvider) {
+        this.credentialsProvider = credentialsProvider;
+    }
+
     /**
      * Creates a Bedrock runtime client for the given region.
      *
@@ -23,6 +29,7 @@ public class BedrockRuntimeClientFactory {
     public BedrockRuntimeClient create(final String region) {
         return BedrockRuntimeClient.builder()
                 .region(Region.of(region))
+                .credentialsProvider(credentialsProvider)
                 .build();
     }
 }

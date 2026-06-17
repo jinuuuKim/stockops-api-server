@@ -16,6 +16,9 @@ import com.stockops.ai.bedrock.agent.AgentToolDispatcher;
 import com.stockops.ai.bedrock.agent.AgentToolResult;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
+import com.stockops.ai.bedrock.dto.BedrockRagQueryRequest;
+import com.stockops.ai.bedrock.dto.BedrockRagQueryResponse;
+import io.micrometer.observation.ObservationRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,10 +27,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeAsyncClient;
+import software.amazon.awssdk.services.bedrockagentruntime.BedrockAgentRuntimeClient;
 import software.amazon.awssdk.services.bedrockagentruntime.model.FunctionInvocationInput;
 import software.amazon.awssdk.services.bedrockagentruntime.model.FunctionParameter;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvocationInputMember;
 import software.amazon.awssdk.services.bedrockagentruntime.model.InvokeAgentRequest;
+import software.amazon.awssdk.services.bedrockagentruntime.model.RetrieveAndGenerateOutput;
+import software.amazon.awssdk.services.bedrockagentruntime.model.RetrieveAndGenerateRequest;
+import software.amazon.awssdk.services.bedrockagentruntime.model.RetrieveAndGenerateResponse;
 import software.amazon.awssdk.services.bedrockagentruntime.model.ReturnControlPayload;
 import software.amazon.awssdk.services.bedrockagentruntime.model.SessionState;
 
@@ -52,6 +59,9 @@ class BedrockAgentRuntimeClientAdapterTest {
     @Mock
     private BedrockAgentRuntimeAsyncClient asyncClient;
 
+    @Mock
+    private BedrockAgentRuntimeClient syncClient;
+
     private BedrockAiProperties properties;
     private BedrockAgentRuntimeClientAdapter adapter;
 
@@ -61,7 +71,8 @@ class BedrockAgentRuntimeClientAdapterTest {
         properties.setEnabled(true);
         properties.setAgentId("AGENT123");
         properties.setAgentAliasId("ALIAS123");
-        adapter = spy(new BedrockAgentRuntimeClientAdapter(properties, toolDispatcher, clientFactory));
+        adapter = spy(new BedrockAgentRuntimeClientAdapter(
+                properties, toolDispatcher, clientFactory, ObservationRegistry.NOOP));
     }
 
     /**
@@ -197,6 +208,58 @@ class BedrockAgentRuntimeClientAdapterTest {
 
         assertThat(response.answer()).contains("오류");
         assertThat(response.sessionId()).isEqualTo("session-1");
+    }
+
+    /**
+     * Verifies the scope/safety guardrail is attached to the RAG (RetrieveAndGenerate) request
+     * when both id and version are configured — closing the bypass on the free-text
+     * {@code /api/v1/ai/bedrock/rag/query} path.
+     */
+    @Test
+    void retrieveAndGenerateAttachesGuardrailWhenConfigured() {
+        properties.setKnowledgeBaseId("KB123");
+        properties.setModelId("model-arn");
+        properties.setGuardrailId("gr-123");
+        properties.setGuardrailVersion("DRAFT");
+        when(clientFactory.createSyncClient(anyString())).thenReturn(syncClient);
+        final ArgumentCaptor<RetrieveAndGenerateRequest> captor =
+                ArgumentCaptor.forClass(RetrieveAndGenerateRequest.class);
+        when(syncClient.retrieveAndGenerate(captor.capture())).thenReturn(
+                RetrieveAndGenerateResponse.builder()
+                        .output(RetrieveAndGenerateOutput.builder().text("조치 안내입니다.").build())
+                        .build());
+
+        final BedrockRagQueryResponse response = adapter.retrieveAndGenerate(
+                new BedrockRagQueryRequest("재고 부족 시 어떻게 하나요?", "ALERT_TYPE", null));
+
+        assertThat(response.answer()).isEqualTo("조치 안내입니다.");
+        final var guardrail = captor.getValue().retrieveAndGenerateConfiguration()
+                .knowledgeBaseConfiguration().generationConfiguration().guardrailConfiguration();
+        assertThat(guardrail).isNotNull();
+        assertThat(guardrail.guardrailId()).isEqualTo("gr-123");
+        assertThat(guardrail.guardrailVersion()).isEqualTo("DRAFT");
+    }
+
+    /**
+     * Verifies no generation/guardrail config is attached when the guardrail is not configured,
+     * so the RAG request shape is unchanged for deployments without a guardrail.
+     */
+    @Test
+    void retrieveAndGenerateOmitsGuardrailWhenNotConfigured() {
+        properties.setKnowledgeBaseId("KB123");
+        properties.setModelId("model-arn");
+        when(clientFactory.createSyncClient(anyString())).thenReturn(syncClient);
+        final ArgumentCaptor<RetrieveAndGenerateRequest> captor =
+                ArgumentCaptor.forClass(RetrieveAndGenerateRequest.class);
+        when(syncClient.retrieveAndGenerate(captor.capture())).thenReturn(
+                RetrieveAndGenerateResponse.builder()
+                        .output(RetrieveAndGenerateOutput.builder().text("answer").build())
+                        .build());
+
+        adapter.retrieveAndGenerate(new BedrockRagQueryRequest("질문", "ALERT_TYPE", null));
+
+        assertThat(captor.getValue().retrieveAndGenerateConfiguration()
+                .knowledgeBaseConfiguration().generationConfiguration()).isNull();
     }
 
     private ReturnControlPayload returnControlPayload(final String invocationId, final String function,

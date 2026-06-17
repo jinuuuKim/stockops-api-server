@@ -47,8 +47,6 @@ public class SettingsService {
         final String[] profiles = environment.getActiveProfiles();
         final String activeProfile = profiles.length > 0 ? profiles[0] : "default";
         final String businessZone = environment.getProperty("stockops.ai.business-zone", "Asia/Seoul");
-        final boolean geminiEnabled = Boolean.parseBoolean(
-                environment.getProperty("stockops.ai.gemini.enabled", "false"));
 
         return new SystemGeneralDto(
                 userRepository.count(),
@@ -58,7 +56,6 @@ public class SettingsService {
                 purchaseOrderRepository.count(),
                 bedrockProperties.isEnabled(),
                 vertexProperties.isEnabled(),
-                geminiEnabled,
                 businessZone,
                 activeProfile);
     }
@@ -77,13 +74,7 @@ public class SettingsService {
                 vertexProperties.getModelId(),
                 hasText(vertexProperties.getCredentialsJson()));
 
-        final String geminiModelName = environment.getProperty("stockops.ai.gemini.model-name", "gemini-pro");
-        final boolean geminiEnabled = Boolean.parseBoolean(
-                environment.getProperty("stockops.ai.gemini.enabled", "false"));
-        final boolean geminiHasApiKey = hasText(environment.getProperty("stockops.ai.gemini.api-key", ""));
-        final var gemini = new SystemIntegrationsDto.GeminiIntegration(geminiEnabled, geminiModelName, geminiHasApiKey);
-
-        return new SystemIntegrationsDto(bedrock, vertex, gemini);
+        return new SystemIntegrationsDto(bedrock, vertex);
     }
 
     private static boolean hasText(final String value) {

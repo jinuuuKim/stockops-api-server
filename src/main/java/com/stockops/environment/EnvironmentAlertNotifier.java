@@ -4,6 +4,8 @@ import com.stockops.entity.AlertSeverity;
 import com.stockops.entity.EnvironmentAlert;
 import com.stockops.entity.SensorDevice;
 import com.stockops.entity.Warehouse;
+import com.stockops.notification.guidance.EventGuidanceService;
+import com.stockops.notification.webhook.AlertTypeNotificationCatalog;
 import com.stockops.notification.webhook.WebhookEndpointConfig;
 import com.stockops.notification.webhook.WebhookEndpointConfigRepository;
 import com.stockops.notification.webhook.WebhookPayload;
@@ -35,6 +37,7 @@ public class EnvironmentAlertNotifier {
     private final WebhookService webhookService;
     private final WebhookEndpointConfigRepository webhookEndpointConfigRepository;
     private final WarehouseRepository warehouseRepository;
+    private final EventGuidanceService eventGuidanceService;
 
     /**
      * Creates the notifier.
@@ -42,14 +45,17 @@ public class EnvironmentAlertNotifier {
      * @param webhookService webhook dispatch service
      * @param webhookEndpointConfigRepository enabled webhook endpoint lookup
      * @param warehouseRepository warehouse repository (resolves the sensor's warehouse name for the payload)
+     * @param eventGuidanceService produces the Korean remediation guidance shown in the card
      */
     public EnvironmentAlertNotifier(
             final WebhookService webhookService,
             final WebhookEndpointConfigRepository webhookEndpointConfigRepository,
-            final WarehouseRepository warehouseRepository) {
+            final WarehouseRepository warehouseRepository,
+            final EventGuidanceService eventGuidanceService) {
         this.webhookService = webhookService;
         this.webhookEndpointConfigRepository = webhookEndpointConfigRepository;
         this.warehouseRepository = warehouseRepository;
+        this.eventGuidanceService = eventGuidanceService;
     }
 
     /**
@@ -100,6 +106,10 @@ public class EnvironmentAlertNotifier {
             return;
         }
 
+        final AlertTypeNotificationCatalog.Mapping mapping =
+                AlertTypeNotificationCatalog.forAlertType(alert.getAlertType());
+        final EventGuidanceService.EventGuidance guidance =
+                eventGuidanceService.guidanceFor(alert.getAlertType(), alert.getSeverity().name());
         final WebhookPayload payload = WebhookPayload.builder()
                 .eventType(EVENT_TYPE)
                 .message(alert.getMessage())
@@ -107,10 +117,89 @@ public class EnvironmentAlertNotifier {
                 .location(warehouse.getName())
                 .alertType(alert.getAlertType())
                 .timestamp(Instant.now())
+                .permissionLabel(AlertTypeNotificationCatalog.roleLabelKo(mapping.baseRole()))
+                .alertName(mapping.alertName())
+                .eventTitle(buildEventTitle(warehouse.getName(), device, mapping.alertName()))
+                .configuredValue(buildConfiguredValue(device))
+                .currentValue(buildCurrentValue(alert, device))
+                .statusLabel(buildStatusLabel(alert, device))
+                .guidance(guidance == null ? null : guidance.text())
+                .guidanceSource(buildGuidanceSource(guidance))
                 .build();
         for (final WebhookEndpointConfig endpoint : endpoints.values()) {
             webhookService.send(endpoint.getProviderType().name(), endpoint.getWebhookUrl(), payload);
         }
+    }
+
+    private String buildEventTitle(final String warehouseName, final SensorDevice device,
+                                   final String alertName) {
+        final StringBuilder sb = new StringBuilder("[").append(warehouseName).append("] ");
+        if (device != null && device.getName() != null) {
+            sb.append(device.getName()).append(" · ");
+        }
+        return sb.append(alertName).toString();
+    }
+
+    /**
+     * Builds the "설정값" line from the sensor's critical thresholds, e.g. {@code "허용 -30.0 ~ -12.0°C"}.
+     * Returns null when the device has no thresholds (the fact is then omitted from the card).
+     */
+    private String buildConfiguredValue(final SensorDevice device) {
+        if (device == null || !device.hasThresholds()) {
+            return null;
+        }
+        final String unit = device.getUnit() == null ? "" : device.getUnit();
+        final Double min = device.getCritMin();
+        final Double max = device.getCritMax();
+        if (min != null && max != null) {
+            return String.format(java.util.Locale.ROOT, "허용 %s ~ %s%s", min, max, unit);
+        }
+        if (max != null) {
+            return String.format(java.util.Locale.ROOT, "허용 최대 %s%s", max, unit);
+        }
+        if (min != null) {
+            return String.format(java.util.Locale.ROOT, "허용 최소 %s%s", min, unit);
+        }
+        return null;
+    }
+
+    /** Builds the "현재 값" line from the alert's persisted reading value, or null when absent. */
+    private String buildCurrentValue(final EnvironmentAlert alert, final SensorDevice device) {
+        if (alert.getReadingValue() == null) {
+            return null;
+        }
+        String unit = alert.getReadingUnit();
+        if (unit == null && device != null) {
+            unit = device.getUnit();
+        }
+        return alert.getReadingValue() + (unit == null ? "" : unit);
+    }
+
+    /** Source string for the delivery log, e.g. "AI_FORMATTED", "KNOWLEDGE_BASE:s3://…", "FALLBACK". */
+    private String buildGuidanceSource(final EventGuidanceService.EventGuidance guidance) {
+        if (guidance == null) {
+            return null;
+        }
+        return guidance.citation() == null
+                ? guidance.source().name()
+                : guidance.source().name() + ":" + guidance.citation();
+    }
+
+    /** Derives the "상태" label (초과/미달/정상) by comparing the reading to the sensor's bounds. */
+    private String buildStatusLabel(final EnvironmentAlert alert, final SensorDevice device) {
+        final Double value = alert.getReadingValue();
+        if (value == null || device == null || !device.hasThresholds()) {
+            return null;
+        }
+        if ((device.getCritMax() != null && value > device.getCritMax())
+                || (device.getWarnMax() != null && value > device.getWarnMax())) {
+            return "초과";
+        }
+        if ((device.getCritMin() != null && value < device.getCritMin())
+                || (device.getWarnMin() != null && value < device.getWarnMin())) {
+            return "미달";
+        }
+        return "정상";
     }
 
     private WebhookPayload.Severity toWebhookSeverity(final AlertSeverity severity) {

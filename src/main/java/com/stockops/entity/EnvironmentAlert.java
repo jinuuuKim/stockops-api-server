@@ -53,7 +53,31 @@ public class EnvironmentAlert extends BaseEntity {
     @Column(name = "acknowledgement_note", length = 1000)
     private String acknowledgementNote;
 
+    /** Measured value that triggered the alert ("현재 값"); null for non-numeric events (e.g. door). */
+    @Column(name = "reading_value")
+    private Double readingValue;
+
+    /** Unit for {@link #readingValue}, e.g. "°C". */
+    @Column(name = "reading_unit", length = 30)
+    private String readingUnit;
+
     public EnvironmentAlert() {
+    }
+
+    public Double getReadingValue() {
+        return this.readingValue;
+    }
+
+    public void setReadingValue(final Double readingValue) {
+        this.readingValue = readingValue;
+    }
+
+    public String getReadingUnit() {
+        return this.readingUnit;
+    }
+
+    public void setReadingUnit(final String readingUnit) {
+        this.readingUnit = readingUnit;
     }
 
     public Long getId() {

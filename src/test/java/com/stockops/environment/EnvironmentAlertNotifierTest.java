@@ -45,6 +45,9 @@ class EnvironmentAlertNotifierTest {
     @Mock
     private WarehouseRepository warehouseRepository;
 
+    @Mock
+    private com.stockops.notification.guidance.EventGuidanceService eventGuidanceService;
+
     @InjectMocks
     private EnvironmentAlertNotifier notifier;
 

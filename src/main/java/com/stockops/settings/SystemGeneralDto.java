@@ -8,7 +8,6 @@ public record SystemGeneralDto(
         long purchaseOrderCount,
         boolean bedrockEnabled,
         boolean vertexEnabled,
-        boolean geminiEnabled,
         String businessZone,
         String activeProfile
 ) {}

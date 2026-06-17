@@ -62,51 +62,75 @@ public class TeamsWebhookProvider implements WebhookProvider {
         postJson(webhookUrl, body, headers);
     }
 
-    private Map<String, Object> buildTeamsPayload(final WebhookPayload payload) {
+    /** Closing watermark line appended to every card. */
+    private static final String WATERMARK = "_Stockops에서 발송되었습니다._";
+
+    // Package-private for unit testing of the rendered MessageCard shape.
+    Map<String, Object> buildTeamsPayload(final WebhookPayload payload) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("@type", "MessageCard");
         body.put("@context", "https://schema.org/extensions");
         body.put("themeColor", severityHex(payload.severity()));
-        body.put("summary", payload.eventType());
+        body.put("summary", firstNonBlank(payload.alertName(), payload.eventType()));
         body.put("title", formatTitle(payload));
-        body.put("text", payload.message());
+        // Body text: Korean event title line, falling back to the raw message.
+        final String eventLine = firstNonBlank(payload.eventTitle(), payload.message());
+        if (eventLine != null) {
+            body.put("text", "**" + eventLine + "**");
+        }
 
         java.util.List<Map<String, Object>> sections = new ArrayList<>();
         Map<String, Object> section = new LinkedHashMap<>();
-        section.put("activityTitle", payload.eventType());
+        section.put("activityTitle", firstNonBlank(payload.alertName(), payload.eventType()));
 
         java.util.List<Map<String, Object>> facts = new ArrayList<>();
-        addFact(facts, "Severity", payload.severity().name());
-        if (payload.centerName() != null) {
-            addFact(facts, "Center", payload.centerName());
+        addFact(facts, "경고수준", severityLabelKo(payload.severity()));
+        if (payload.permissionLabel() != null) {
+            addFact(facts, "권한", payload.permissionLabel());
         }
-        if (payload.warehouseName() != null) {
-            addFact(facts, "Warehouse", payload.warehouseName());
+        final String place = firstNonBlank(payload.location(), payload.warehouseName(), payload.centerName());
+        if (place != null) {
+            addFact(facts, "위치", place);
         }
-        if (payload.location() != null) {
-            addFact(facts, "Location", payload.location());
+        if (payload.configuredValue() != null) {
+            addFact(facts, "설정값", payload.configuredValue());
+        }
+        if (payload.currentValue() != null) {
+            addFact(facts, "현재 값", payload.currentValue());
+        }
+        if (payload.statusLabel() != null) {
+            addFact(facts, "상태", payload.statusLabel());
         }
         if (payload.alertType() != null) {
-            addFact(facts, "Alert Type", payload.alertType());
+            addFact(facts, "유형", payload.alertType());
         }
         if (payload.details() != null && !payload.details().isEmpty()) {
             payload.details().forEach((k, v) -> addFact(facts, k, v));
         }
-
         section.put("facts", facts);
-        sections.add(section);
-        body.put("sections", sections);
 
+        // Remediation guidance (AI / Knowledge Base) rendered as the section body.
+        if (payload.guidance() != null && !payload.guidance().isBlank()) {
+            section.put("text", "📋 **상세 조치안내**\n\n" + payload.guidance());
+        }
+        sections.add(section);
+
+        // Watermark as its own trailing section so it reads as a footer.
+        Map<String, Object> watermark = new LinkedHashMap<>();
+        watermark.put("text", WATERMARK);
+        sections.add(watermark);
+
+        body.put("sections", sections);
         return body;
     }
 
     private String formatTitle(final WebhookPayload payload) {
         StringBuilder sb = new StringBuilder();
-        sb.append("[").append(payload.severity().name()).append("] ");
-        sb.append(payload.eventType());
-        if (payload.centerName() != null) {
-            sb.append(" - ").append(payload.centerName());
+        if (payload.permissionLabel() != null) {
+            sb.append("[").append(payload.permissionLabel()).append("] · ");
         }
+        sb.append("[").append(severityLabelKo(payload.severity())).append("] ");
+        sb.append(firstNonBlank(payload.alertName(), payload.eventType()));
         return sb.toString();
     }
 
@@ -116,6 +140,23 @@ public class TeamsWebhookProvider implements WebhookProvider {
             case WARNING -> "FFA500";
             case INFO -> "36A64F";
         };
+    }
+
+    private String severityLabelKo(final WebhookPayload.Severity severity) {
+        return switch (severity) {
+            case CRITICAL -> "위험";
+            case WARNING -> "경고";
+            case INFO -> "안내";
+        };
+    }
+
+    private static String firstNonBlank(final String... values) {
+        for (final String v : values) {
+            if (v != null && !v.isBlank()) {
+                return v;
+            }
+        }
+        return null;
     }
 
     private void addFact(final java.util.List<Map<String, Object>> facts,
@@ -145,7 +186,10 @@ public class TeamsWebhookProvider implements WebhookProvider {
             extraHeaders.forEach(headers::set);
 
             HttpEntity<String> entity = new HttpEntity<>(json, headers);
-            restTemplate.postForEntity(webhookUrl, entity, String.class);
+            // Pass a URI, not a String: a String URL is treated as a UriTemplate and re-encoded,
+            // which corrupts already-encoded SAS query params (e.g. Power Automate's sp=%2F.../sig)
+            // and yields 401 AuthorizationFailed. URI.create keeps the URL verbatim.
+            restTemplate.postForEntity(java.net.URI.create(webhookUrl), entity, String.class);
             log.info("[TEAMS] Webhook sent successfully: eventType={}", body.get("title"));
         } catch (RestClientException e) {
             log.error("[TEAMS] Webhook send failed: {}", e.getMessage(), e);
