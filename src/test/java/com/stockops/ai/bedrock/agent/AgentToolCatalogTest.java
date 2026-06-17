@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 class AgentToolCatalogTest {
 
     private static final List<String> EXPECTED_TOOLS = List.of(
+            "searchInventory",
             "getInventoryRisk",
             "getForecastRecommendation",
             "getSensorAnomalies",

@@ -55,6 +55,12 @@ public class AgentToolCatalog {
     private List<Tool> buildTools() {
         final List<Tool> tools = new ArrayList<>();
 
+        tools.add(tool("searchInventory",
+                "상품명·바코드·로트(LOT)번호로 재고를 검색한다. 사용자가 숫자 ID가 아닌 이름/바코드/로트번호로 물으면 "
+                        + "먼저 이 도구로 상품(productId)·로트와 현재 재고 요약을 찾는다. 로트번호는 'LOT' 또는 'LOT-' 접두사를 붙여 검색해도 된다.",
+                props(prop("query", "string", "상품명·바코드·로트번호 검색어 (필수)")),
+                List.of("query")));
+
         tools.add(tool("getInventoryRisk",
                 "재고 위험 조회. 특정 상품(productId) 또는 전체 재고의 현재 수량/상태를 본다.",
                 props(prop("productId", "integer", "상품 ID (생략 시 전체 재고)")),

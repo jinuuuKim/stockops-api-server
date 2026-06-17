@@ -119,6 +119,7 @@ public class AgentToolDispatcher {
         try {
             final JsonNode input = JSON.readTree(inputJson != null ? inputJson : "{}");
             return switch (toolName) {
+                case "searchInventory" -> handleSearchInventory(input);
                 case "getInventoryRisk" -> handleInventoryRisk(input);
                 case "getForecastRecommendation" -> handleForecastRecommendation(input);
                 case "getSensorAnomalies" -> handleSensorAnomalies(input);
@@ -150,6 +151,15 @@ public class AgentToolDispatcher {
     // -------------------------------------------------------------------------
     // Tool handlers
     // -------------------------------------------------------------------------
+
+    private AgentToolResult handleSearchInventory(final JsonNode input) throws JsonProcessingException {
+        final String query = text(input, "query", null);
+        if (query == null || query.isBlank()) {
+            return AgentToolResult.failure("searchInventory", "query is required");
+        }
+        final Object result = inventoryQueryService.searchInventory(query);
+        return AgentToolResult.success("searchInventory", JSON.writeValueAsString(result));
+    }
 
     private AgentToolResult handleInventoryRisk(final JsonNode input) throws JsonProcessingException {
         final Long productId = longOrNull(input, "productId");

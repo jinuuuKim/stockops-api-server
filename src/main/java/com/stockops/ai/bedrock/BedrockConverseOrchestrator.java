@@ -231,6 +231,10 @@ public class BedrockConverseOrchestrator {
                 ? result.errorMessage().replace("\"", "'") : "tool execution failed") + "\"}";
     }
 
+    /** Matches a balanced {@code <thinking>...</thinking>} reasoning block (case-insensitive, spans newlines). */
+    private static final java.util.regex.Pattern REASONING_BLOCK =
+            java.util.regex.Pattern.compile("(?is)<thinking>.*?</thinking>");
+
     private String extractText(final Message message) {
         if (message == null || message.content() == null) {
             return "";
@@ -241,7 +245,23 @@ public class BedrockConverseOrchestrator {
                 text.append(block.text());
             }
         }
-        return text.toString();
+        return stripReasoning(text.toString());
+    }
+
+    /**
+     * Removes any model-emitted {@code <thinking>} reasoning so internal chain-of-thought never
+     * reaches the user. Weaker models (e.g. Nova) sometimes prepend a {@code <thinking>...</thinking>}
+     * block to the answer; strip the block and any orphan tags, then trim surrounding whitespace.
+     *
+     * @param text raw concatenated model text
+     * @return the answer with reasoning blocks/tags removed
+     */
+    private String stripReasoning(final String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        final String withoutBlocks = REASONING_BLOCK.matcher(text).replaceAll("");
+        return withoutBlocks.replaceAll("(?is)</?thinking>", "").strip();
     }
 
     private String documentToJson(final Document input) {

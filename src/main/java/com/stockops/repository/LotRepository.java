@@ -5,6 +5,7 @@ import com.stockops.entity.LotStatus;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -69,5 +70,21 @@ public interface LotRepository extends JpaRepository<Lot, Long> {
             """)
     List<Lot> findActiveLotsByProductIdOrderByExpiryDateAsc(@Param("productId") Long productId,
                                                              @Param("status") LotStatus status);
+
+    /**
+     * Searches lots whose lot number contains the term (case-insensitive). Used by the assistant's
+     * free-text inventory search so a user can look up stock by lot number; the caller normalizes
+     * {@code LOT}/{@code LOT-} prefixes into multiple terms before querying.
+     *
+     * @param term     lot-number fragment to match
+     * @param pageable result window (caps the number of matches)
+     * @return matching lots
+     */
+    @Query("""
+            SELECT l FROM Lot l
+            WHERE LOWER(l.lotNumber) LIKE LOWER(CONCAT('%', :term, '%'))
+            ORDER BY l.id ASC
+            """)
+    List<Lot> searchByLotNumber(@Param("term") String term, Pageable pageable);
 
 }

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for Product entity persistence and queries.
@@ -63,4 +64,22 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
               ) < p.safetyStockQuantity
             """)
     long countProductsBelowSafetyStock();
+
+    /**
+     * Searches active products whose name or barcode contains the query (case-insensitive).
+     * Used by the assistant's free-text inventory search so users can look up stock by product
+     * name or barcode instead of a numeric id.
+     *
+     * @param q        search keyword (matched against name and barcode)
+     * @param pageable result window (caps the number of matches)
+     * @return matching active products
+     */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.deleted = false
+              AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :q, '%'))
+                   OR LOWER(p.barcode) LIKE LOWER(CONCAT('%', :q, '%')))
+            ORDER BY p.id ASC
+            """)
+    List<Product> searchByNameOrBarcode(@Param("q") String q, Pageable pageable);
 }

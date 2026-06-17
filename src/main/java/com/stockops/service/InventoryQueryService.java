@@ -14,8 +14,17 @@ import com.stockops.repository.LotRepository;
 import com.stockops.repository.LocationRepository;
 import com.stockops.repository.ProductRepository;
 import com.stockops.security.ScopeGuard;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -137,6 +146,122 @@ public class InventoryQueryService {
                 .limit(Math.max(0, limit))
                 .map(this::toTransactionDTO)
                 .toList();
+    }
+
+    private static final int SEARCH_LIMIT = 20;
+
+    /**
+     * Free-text inventory search by product name, barcode, or lot number — so the assistant can
+     * resolve a user's natural query (which rarely includes numeric ids) into concrete products
+     * and lots with their scope-visible stock.
+     *
+     * <p>Lot numbers are stored with a {@code LOT-} prefix (e.g. {@code LOT-9900...-260304-01}).
+     * A user often types the lot with a {@code LOT} or {@code LOT-} prefix, so the query is
+     * normalized into several lot-number terms (raw, prefix-stripped, and {@code LOT-}-prefixed)
+     * before matching. Products referenced by matched lots are included even when the raw query
+     * does not match their name/barcode.
+     *
+     * @param query free-text keyword (product name, barcode, or lot number)
+     * @return matched products (with scope-filtered stock summary) and lots
+     */
+    public Map<String, Object> searchInventory(final String query) {
+        final String q = query == null ? "" : query.trim();
+        final Map<String, Object> result = new LinkedHashMap<>();
+        result.put("query", q);
+        if (q.isBlank()) {
+            result.put("products", List.of());
+            result.put("lots", List.of());
+            result.put("productMatchCount", 0);
+            result.put("lotMatchCount", 0);
+            result.put("message", "검색어가 비어 있습니다.");
+            return result;
+        }
+
+        final Pageable limit = PageRequest.of(0, SEARCH_LIMIT);
+
+        // Lot search across LOT / LOT- normalized terms (dedup by lot id, capped).
+        final Map<Long, Lot> lotHits = new LinkedHashMap<>();
+        for (final String term : lotSearchTerms(q)) {
+            for (final Lot lot : lotRepository.searchByLotNumber(term, limit)) {
+                lotHits.putIfAbsent(lot.getId(), lot);
+            }
+            if (lotHits.size() >= SEARCH_LIMIT) {
+                break;
+            }
+        }
+
+        // Product search by name/barcode, plus the products referenced by matched lots.
+        final Map<Long, Product> productHits = new LinkedHashMap<>();
+        for (final Product product : productRepository.searchByNameOrBarcode(q, limit)) {
+            productHits.putIfAbsent(product.getId(), product);
+        }
+        for (final Lot lot : lotHits.values()) {
+            if (!productHits.containsKey(lot.getProductId())) {
+                productRepository.findByIdAndDeletedFalse(lot.getProductId())
+                        .ifPresent(product -> productHits.putIfAbsent(product.getId(), product));
+            }
+        }
+
+        final List<Map<String, Object>> products = new ArrayList<>();
+        for (final Product product : productHits.values()) {
+            final List<InventoryDTO> rows = getInventoryByProduct(product.getId());
+            int onHand = 0;
+            int available = 0;
+            final Set<Long> locations = new HashSet<>();
+            for (final InventoryDTO row : rows) {
+                onHand += row.quantity();
+                available += row.quantity() - row.reservedQuantity();
+                locations.add(row.locationId());
+            }
+            final Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("productId", product.getId());
+            entry.put("name", product.getName());
+            entry.put("barcode", product.getBarcode());
+            entry.put("category", product.getCategory());
+            entry.put("totalOnHand", onHand);
+            entry.put("totalAvailable", available);
+            entry.put("locationCount", locations.size());
+            products.add(entry);
+        }
+
+        final List<Map<String, Object>> lots = new ArrayList<>();
+        for (final Lot lot : lotHits.values()) {
+            final Product product = productHits.get(lot.getProductId());
+            final Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("lotId", lot.getId());
+            entry.put("lotNumber", lot.getLotNumber());
+            entry.put("productId", lot.getProductId());
+            entry.put("productName", product == null ? null : product.getName());
+            entry.put("quantity", lot.getQuantity() == null ? 0 : lot.getQuantity());
+            entry.put("status", lot.getStatus() == null ? null : lot.getStatus().name());
+            entry.put("expiryDate", lot.getExpiryDate());
+            lots.add(entry);
+        }
+
+        result.put("products", products);
+        result.put("lots", lots);
+        result.put("productMatchCount", products.size());
+        result.put("lotMatchCount", lots.size());
+        return result;
+    }
+
+    /**
+     * Builds the lot-number search terms for a query, normalizing {@code LOT}/{@code LOT-} prefixes
+     * so a user-typed {@code LOT12345} or {@code LOT-12345} matches the stored {@code LOT-...} form.
+     */
+    private List<String> lotSearchTerms(final String query) {
+        final Set<String> terms = new LinkedHashSet<>();
+        terms.add(query);
+        final String upper = query.toUpperCase(Locale.ROOT);
+        if (upper.startsWith("LOT-")) {
+            terms.add(query.substring(4));
+        } else if (upper.startsWith("LOT")) {
+            final String rest = query.substring(3);
+            terms.add(rest);
+            terms.add("LOT-" + rest);
+        }
+        terms.removeIf(String::isBlank);
+        return new ArrayList<>(terms);
     }
 
     private List<InventoryDTO> toInventoryDtos(final List<Inventory> inventory) {

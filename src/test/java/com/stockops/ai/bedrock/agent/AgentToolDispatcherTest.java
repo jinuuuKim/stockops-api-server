@@ -80,6 +80,26 @@ class AgentToolDispatcherTest {
     }
 
     @Test
+    void dispatch_searchInventory_delegatesToService() {
+        when(inventoryQueryService.searchInventory("야채교자"))
+                .thenReturn(Map.of("query", "야채교자", "productMatchCount", 1));
+
+        final AgentToolResult result = dispatcher.dispatch("searchInventory", "{\"query\": \"야채교자\"}");
+
+        assertThat(result.success()).isTrue();
+        assertThat(result.toolName()).isEqualTo("searchInventory");
+        assertThat(result.resultJson()).contains("\"productMatchCount\":1");
+    }
+
+    @Test
+    void dispatch_searchInventory_withoutQuery_returnsFailure() {
+        final AgentToolResult result = dispatcher.dispatch("searchInventory", "{}");
+
+        assertThat(result.success()).isFalse();
+        assertThat(result.errorMessage()).contains("query is required");
+    }
+
+    @Test
     void dispatch_getProphetForecast_mapsForecastPoints() {
         when(aiForecastClient.getForecast(1L, 7)).thenReturn(new AiForecastClient.AiForecastResponse(
                 1L, 7, List.of(new AiForecastClient.AiForecastResponse.ForecastPoint(
