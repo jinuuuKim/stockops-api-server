@@ -72,7 +72,7 @@ class BedrockAiControllerTest {
     @Test
     void invokeAgent_returns200WithAnswer() throws Exception {
         when(bedrockAiFacade.invokeAgent(any())).thenReturn(
-                new BedrockAgentInvokeResponse("재고 보충을 권장합니다.", "sess-1", true));
+                BedrockAgentInvokeResponse.of("재고 보충을 권장합니다.", "sess-1", true));
 
         mockMvc.perform(post("/api/v1/ai/bedrock/agent/invoke")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -87,7 +87,7 @@ class BedrockAiControllerTest {
     void assistant_returns200AndInjectsKnowledgeBaseContext() throws Exception {
         when(knowledgeBaseContextProvider.retrieveContext(any())).thenReturn("운영 매뉴얼 발췌");
         when(converseOrchestrator.converse(any(), any())).thenReturn(
-                new BedrockAgentInvokeResponse("창고 2 재고는 충분합니다.", "sess-9", false));
+                BedrockAgentInvokeResponse.of("창고 2 재고는 충분합니다.", "sess-9", false));
 
         mockMvc.perform(post("/api/v1/ai/bedrock/assistant")
                         .contentType(MediaType.APPLICATION_JSON)

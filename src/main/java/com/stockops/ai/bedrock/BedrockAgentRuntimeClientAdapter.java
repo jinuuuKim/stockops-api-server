@@ -169,7 +169,7 @@ public class BedrockAgentRuntimeClientAdapter {
         if (!properties.isEnabled()
                 || properties.getAgentId() == null || properties.getAgentId().isBlank()
                 || properties.getAgentAliasId() == null || properties.getAgentAliasId().isBlank()) {
-            return new BedrockAgentInvokeResponse(
+            return BedrockAgentInvokeResponse.of(
                     "Bedrock Agent is not configured.",
                     request.sessionId(),
                     false);
@@ -190,7 +190,7 @@ public class BedrockAgentRuntimeClientAdapter {
                 final AgentTurn result = executeTurn(client, invokeRequest);
                 answer.append(result.text());
                 if (result.returnControl() == null) {
-                    return new BedrockAgentInvokeResponse(answer.toString(), sessionId, false);
+                    return BedrockAgentInvokeResponse.of(answer.toString(), sessionId, false);
                 }
                 if (turn == MAX_TOOL_TURNS) {
                     break;
@@ -201,7 +201,7 @@ public class BedrockAgentRuntimeClientAdapter {
             }
 
             log.warn("Bedrock Agent exceeded {} return-control turns for sessionId={}", MAX_TOOL_TURNS, sessionId);
-            return new BedrockAgentInvokeResponse(
+            return BedrockAgentInvokeResponse.of(
                     answer.isEmpty()
                             ? "에이전트가 허용된 도구 호출 횟수를 초과하여 응답을 완료하지 못했습니다."
                             : answer.toString(),
@@ -209,7 +209,7 @@ public class BedrockAgentRuntimeClientAdapter {
                     false);
         } catch (final Exception e) {
             log.error("Bedrock Agent invocation failed: {}", e.getMessage(), e);
-            return new BedrockAgentInvokeResponse(
+            return BedrockAgentInvokeResponse.of(
                     "Bedrock Agent 호출 중 오류가 발생했습니다.",
                     sessionId,
                     false);

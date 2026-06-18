@@ -197,6 +197,15 @@ stockops:
     rag:
       rate-limit:
         requests-per-minute: ${STOCKOPS_AI_RAG_RATE_LIMIT:10}
+    # Multi-turn chat history for the tool-use assistant (Redis-backed; size measured in characters).
+    chat-history:
+      enabled: ${STOCKOPS_AI_CHAT_HISTORY_ENABLED:true}
+      ttl: ${STOCKOPS_AI_CHAT_HISTORY_TTL:30m}
+      warn-chars: ${STOCKOPS_AI_CHAT_HISTORY_WARN_CHARS:6000}
+      compact-chars: ${STOCKOPS_AI_CHAT_HISTORY_COMPACT_CHARS:12000}
+      hard-reset-chars: ${STOCKOPS_AI_CHAT_HISTORY_HARD_RESET_CHARS:24000}
+      keep-recent-turns: ${STOCKOPS_AI_CHAT_HISTORY_KEEP_RECENT_TURNS:4}
+      max-stored-turns: ${STOCKOPS_AI_CHAT_HISTORY_MAX_STORED_TURNS:40}
     vertex:
       enabled: ${STOCKOPS_VERTEX_AI_ENABLED:false}
       project-id: ${STOCKOPS_VERTEX_AI_PROJECT_ID:}
