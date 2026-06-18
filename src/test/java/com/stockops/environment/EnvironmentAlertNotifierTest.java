@@ -73,6 +73,27 @@ class EnvironmentAlertNotifierTest {
     }
 
     /**
+     * Safety net: a failure in the AI-backed guidance step (AI disabled/unavailable/unexpected) must
+     * never block delivery of the alert itself — the alert is still sent, just without guidance.
+     */
+    @Test
+    void deliversAlertEvenWhenGuidanceThrows() {
+        final SensorDevice device = sensor(100L, 10L);
+        when(warehouseRepository.findByIdWithCenter(10L)).thenReturn(Optional.of(warehouse(10L, 5L, "강남창고")));
+        when(webhookEndpointConfigRepository.findByWarehouseIdAndEnabledTrue(10L))
+                .thenReturn(List.of(endpoint(1L, "wh-url")));
+        when(webhookEndpointConfigRepository.findByCenterIdAndWarehouseIdIsNullAndEnabledTrue(5L))
+                .thenReturn(List.of());
+        when(eventGuidanceService.guidanceFor(any(), any()))
+                .thenThrow(new RuntimeException("AI down"));
+
+        notifier.dispatch(alert(7L, AlertSeverity.CRITICAL), device);
+
+        // Alert still delivered despite the guidance failure.
+        verify(webhookService).send(eq("TEAMS"), eq("wh-url"), any(WebhookPayload.class));
+    }
+
+    /**
      * Verifies a sensor without a warehouse is skipped (no broadcast fallback).
      */
     @Test
