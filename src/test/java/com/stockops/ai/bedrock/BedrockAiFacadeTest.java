@@ -227,7 +227,7 @@ class BedrockAiFacadeTest {
 
     @Test
     void invokeAgent_createsAiSuggestionWhenActionSuggestedWithScope() {
-        final BedrockAgentInvokeResponse agentResponse = new BedrockAgentInvokeResponse(
+        final BedrockAgentInvokeResponse agentResponse = BedrockAgentInvokeResponse.of(
                 "창고 2의 상품 A 재고 보충을 권장합니다.", "sess-1", true);
         when(agentAdapter.invokeAgent(any())).thenReturn(agentResponse);
         final ArgumentCaptor<AISuggestionService.CreateCommand> cmdCaptor =
@@ -247,7 +247,7 @@ class BedrockAiFacadeTest {
     @Test
     void invokeAgent_doesNotCreateSuggestionWhenActionNotSuggested() {
         when(agentAdapter.invokeAgent(any())).thenReturn(
-                new BedrockAgentInvokeResponse("정보 제공만 합니다.", "sess-1", false));
+                BedrockAgentInvokeResponse.of("정보 제공만 합니다.", "sess-1", false));
 
         facade.invokeAgent(new BedrockAgentInvokeRequest("현황 문의", "sess-1", "WAREHOUSE", 2L));
 
@@ -257,7 +257,7 @@ class BedrockAiFacadeTest {
     @Test
     void invokeAgent_doesNotCreateSuggestionWhenScopeIsMissing() {
         when(agentAdapter.invokeAgent(any())).thenReturn(
-                new BedrockAgentInvokeResponse("조치 제안", null, true));
+                BedrockAgentInvokeResponse.of("조치 제안", null, true));
 
         facade.invokeAgent(new BedrockAgentInvokeRequest("현황 문의", null, null, null));
 

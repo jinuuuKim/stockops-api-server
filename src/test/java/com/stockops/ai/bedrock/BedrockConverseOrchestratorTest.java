@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,9 +12,12 @@ import static org.mockito.Mockito.when;
 import com.stockops.ai.bedrock.agent.AgentToolCatalog;
 import com.stockops.ai.bedrock.agent.AgentToolDispatcher;
 import com.stockops.ai.bedrock.agent.AgentToolResult;
+import com.stockops.ai.bedrock.chat.ChatHistoryProperties;
+import com.stockops.ai.bedrock.chat.ChatHistoryStore;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
 import io.micrometer.observation.ObservationRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,8 +61,11 @@ class BedrockConverseOrchestratorTest {
         properties = new BedrockAiProperties();
         properties.setEnabled(true);
         properties.setModelId("amazon.nova-micro-v1:0");
+        @SuppressWarnings("unchecked")
+        final ObjectProvider<ChatHistoryStore> historyProvider = mock(ObjectProvider.class);
         orchestrator = new BedrockConverseOrchestrator(
-                clientFactory, properties, new AgentToolCatalog(), toolDispatcher, ObservationRegistry.NOOP);
+                clientFactory, properties, new AgentToolCatalog(), toolDispatcher, ObservationRegistry.NOOP,
+                new ChatHistoryProperties(), historyProvider);
     }
 
     @Test

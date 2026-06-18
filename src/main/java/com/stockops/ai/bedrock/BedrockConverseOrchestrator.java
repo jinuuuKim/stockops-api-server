@@ -7,6 +7,9 @@ import java.util.Map;
 import com.stockops.ai.bedrock.agent.AgentToolCatalog;
 import com.stockops.ai.bedrock.agent.AgentToolDispatcher;
 import com.stockops.ai.bedrock.agent.AgentToolResult;
+import com.stockops.ai.bedrock.chat.ChatHistoryProperties;
+import com.stockops.ai.bedrock.chat.ChatHistoryStore;
+import com.stockops.ai.bedrock.chat.ChatSession;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
 import io.micrometer.observation.Observation;
@@ -14,9 +17,12 @@ import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.annotation.Observed;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import software.amazon.awssdk.core.document.Document;
 import software.amazon.awssdk.services.bedrockruntime.BedrockRuntimeClient;
 import software.amazon.awssdk.services.bedrockruntime.model.ContentBlock;
@@ -87,17 +93,24 @@ public class BedrockConverseOrchestrator {
     private final AgentToolCatalog toolCatalog;
     private final AgentToolDispatcher toolDispatcher;
     private final ObservationRegistry observationRegistry;
+    private final ChatHistoryProperties historyProperties;
+    private final ChatHistoryStore historyStore;
 
     public BedrockConverseOrchestrator(final BedrockRuntimeClientFactory clientFactory,
                                        final BedrockAiProperties properties,
                                        final AgentToolCatalog toolCatalog,
                                        final AgentToolDispatcher toolDispatcher,
-                                       final ObservationRegistry observationRegistry) {
+                                       final ObservationRegistry observationRegistry,
+                                       final ChatHistoryProperties historyProperties,
+                                       final ObjectProvider<ChatHistoryStore> historyStoreProvider) {
         this.clientFactory = clientFactory;
         this.properties = properties;
         this.toolCatalog = toolCatalog;
         this.toolDispatcher = toolDispatcher;
         this.observationRegistry = observationRegistry;
+        this.historyProperties = historyProperties;
+        // Absent when Redis is disabled — the assistant then runs single-turn.
+        this.historyStore = historyStoreProvider.getIfAvailable();
     }
 
     /**
@@ -112,23 +125,48 @@ public class BedrockConverseOrchestrator {
     public BedrockAgentInvokeResponse converse(final BedrockAgentInvokeRequest request,
                                                final String documentContext) {
         final String modelReference = properties.generationModelReference();
+        final String sessionId = StringUtils.hasText(request.sessionId())
+                ? request.sessionId() : UUID.randomUUID().toString();
         if (!properties.isEnabled() || modelReference == null || modelReference.isBlank()) {
-            return new BedrockAgentInvokeResponse(
-                    "AI 어시스턴트가 아직 구성되지 않았습니다.", request.sessionId(), false);
+            return BedrockAgentInvokeResponse.of("AI 어시스턴트가 아직 구성되지 않았습니다.", sessionId, false);
         }
 
         // Records whether the domain guardrail is active on this free-text assistant call, so a
         // misconfigured/absent guardrail (a likely scope-leak cause) is visible in the trace.
         tagCurrentObservation("guardrail.applied", properties.hasGuardrail());
 
+        // ---- multi-turn history: load + size guards (warn / compact / hard reset) ----
+        final boolean historyOn = historyStore != null && historyProperties.isEnabled();
+        ChatSession session = historyOn ? historyStore.load(sessionId) : new ChatSession();
+        String notice = null;
+        boolean sessionReset = false;
+        if (historyOn) {
+            final int size = session.charSize();
+            tagCurrentObservation("chat.history_chars", size);
+            if (size >= historyProperties.getHardResetChars()) {
+                historyStore.clear(sessionId);
+                session = new ChatSession();
+                sessionReset = true;
+                notice = "대화가 너무 길어져 새로 시작했어요. 이전 내용은 초기화됐습니다.";
+            } else if (size >= historyProperties.getCompactChars()) {
+                session = compact(modelReference, session);
+            } else if (size >= historyProperties.getWarnChars()) {
+                notice = "대화가 길어지고 있어요. 더 정확한 답변을 위해 가끔 새로 시작하시는 것도 좋습니다.";
+            }
+        }
+
         final List<SystemContentBlock> system = new ArrayList<>();
         system.add(SystemContentBlock.builder().text(resolveSystemPrompt()).build());
+        if (StringUtils.hasText(session.getSummary())) {
+            system.add(SystemContentBlock.builder()
+                    .text("이전 대화 요약(참고용):\n" + session.getSummary()).build());
+        }
         if (documentContext != null && !documentContext.isBlank()) {
             system.add(SystemContentBlock.builder()
                     .text("참고 운영 문서:\n" + documentContext).build());
         }
 
-        final List<Message> messages = new ArrayList<>();
+        final List<Message> messages = historyMessages(session);
         messages.add(Message.builder()
                 .role(ConversationRole.USER)
                 .content(ContentBlock.builder().text(request.message()).build())
@@ -141,7 +179,13 @@ public class BedrockConverseOrchestrator {
                 messages.add(assistant);
 
                 if (response.stopReason() != StopReason.TOOL_USE) {
-                    return new BedrockAgentInvokeResponse(extractText(assistant), request.sessionId(), false);
+                    final String answer = extractText(assistant);
+                    if (historyOn) {
+                        session.addTurn(ChatSession.Turn.USER, request.message());
+                        session.addTurn(ChatSession.Turn.ASSISTANT, answer);
+                        historyStore.save(sessionId, session);
+                    }
+                    return new BedrockAgentInvokeResponse(answer, sessionId, false, notice, sessionReset);
                 }
                 if (turn == properties.getMaxToolTurns()) {
                     break;
@@ -149,13 +193,94 @@ public class BedrockConverseOrchestrator {
                 messages.add(dispatchToolUses(assistant));
             }
             log.warn("Converse exceeded {} tool turns for session {}",
-                    properties.getMaxToolTurns(), request.sessionId());
+                    properties.getMaxToolTurns(), sessionId);
             return new BedrockAgentInvokeResponse(
-                    "도구 호출 횟수를 초과하여 응답을 완료하지 못했습니다.", request.sessionId(), false);
+                    "도구 호출 횟수를 초과하여 응답을 완료하지 못했습니다.", sessionId, false, notice, sessionReset);
         } catch (final Exception e) {
             log.error("Bedrock Converse tool-use failed: {}", e.getMessage(), e);
             return new BedrockAgentInvokeResponse(
-                    "AI 응답 생성 중 오류가 발생했습니다.", request.sessionId(), false);
+                    "AI 응답 생성 중 오류가 발생했습니다.", sessionId, false, notice, sessionReset);
+        }
+    }
+
+    /**
+     * Rebuilds the Converse message list from stored turns. Only final user/assistant text turns are
+     * replayed (no tool blocks). Guarantees the list starts with a USER turn so Converse accepts it.
+     */
+    private List<Message> historyMessages(final ChatSession session) {
+        final List<Message> messages = new ArrayList<>();
+        boolean started = false;
+        for (final ChatSession.Turn turn : session.getTurns()) {
+            final boolean isUser = ChatSession.Turn.USER.equals(turn.role());
+            if (!started && !isUser) {
+                continue; // drop a leading assistant turn — Converse must start with user
+            }
+            started = true;
+            messages.add(Message.builder()
+                    .role(isUser ? ConversationRole.USER : ConversationRole.ASSISTANT)
+                    .content(ContentBlock.builder().text(
+                            turn.text() == null || turn.text().isBlank() ? "(이전 답변)" : turn.text()).build())
+                    .build());
+        }
+        return messages;
+    }
+
+    /**
+     * Compacts a session: summarizes the older turns (beyond {@code keepRecentTurns}) into the running
+     * summary via a plain Bedrock call (no tools, no guardrail), keeping the recent turns verbatim.
+     * On summarization failure it degrades to a sliding window (keep recent, prior summary unchanged).
+     */
+    private ChatSession compact(final String modelReference, final ChatSession session) {
+        final int keep = Math.max(0, historyProperties.getKeepRecentTurns());
+        final List<ChatSession.Turn> turns = session.getTurns();
+        if (turns.size() <= keep) {
+            return session;
+        }
+        final List<ChatSession.Turn> older = turns.subList(0, turns.size() - keep);
+        final List<ChatSession.Turn> recent = new ArrayList<>(turns.subList(turns.size() - keep, turns.size()));
+
+        final StringBuilder convo = new StringBuilder();
+        if (StringUtils.hasText(session.getSummary())) {
+            convo.append("[기존 요약]\n").append(session.getSummary()).append("\n\n[추가 대화]\n");
+        }
+        for (final ChatSession.Turn turn : older) {
+            convo.append(ChatSession.Turn.USER.equals(turn.role()) ? "사용자: " : "어시스턴트: ")
+                    .append(turn.text()).append('\n');
+        }
+
+        final String summary = summarize(modelReference, convo.toString());
+        final ChatSession compacted = new ChatSession();
+        compacted.setSummary(StringUtils.hasText(summary) ? summary : session.getSummary());
+        compacted.setTurns(recent);
+        return compacted;
+    }
+
+    /**
+     * Summarizes a conversation block into a short Korean fact summary. Plain Converse call —
+     * no tools, no guardrail. Returns null on failure so the caller can fall back gracefully.
+     */
+    private String summarize(final String modelReference, final String conversation) {
+        try (BedrockRuntimeClient client = clientFactory.create(properties.getRegion())) {
+            final ConverseRequest request = ConverseRequest.builder()
+                    .modelId(modelReference)
+                    .system(List.of(SystemContentBlock.builder().text(
+                            "다음 대화를 한국어로 핵심만 5문장 이내로 요약하세요. "
+                                    + "사용자가 무엇을 물었고 어떤 답·수치·상품·결정이 오갔는지 사실 위주로 적습니다. "
+                                    + "인사·군더더기·메타설명은 빼고 요약문만 출력합니다.").build()))
+                    .messages(Message.builder()
+                            .role(ConversationRole.USER)
+                            .content(ContentBlock.builder().text(conversation).build())
+                            .build())
+                    .inferenceConfig(InferenceConfiguration.builder()
+                            .temperature((float) properties.getTemperature())
+                            .maxTokens(400)
+                            .build())
+                    .build();
+            final ConverseResponse response = client.converse(request);
+            return extractText(response.output().message());
+        } catch (final Exception e) {
+            log.warn("[ChatHistory] summarization failed (degrading to sliding window): {}", e.getMessage());
+            return null;
         }
     }
 
