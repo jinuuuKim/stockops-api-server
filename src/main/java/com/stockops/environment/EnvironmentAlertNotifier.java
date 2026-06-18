@@ -108,8 +108,18 @@ public class EnvironmentAlertNotifier {
 
         final AlertTypeNotificationCatalog.Mapping mapping =
                 AlertTypeNotificationCatalog.forAlertType(alert.getAlertType());
-        final EventGuidanceService.EventGuidance guidance =
-                eventGuidanceService.guidanceFor(alert.getAlertType(), alert.getSeverity().name());
+        // Safety net: the remediation guidance is AI-backed (Knowledge Base / Bedrock). Whether AI is
+        // disabled, unavailable, or fails unexpectedly, it must NEVER block delivery of the alert
+        // itself — the alert is the critical signal, the guidance is only an enrichment.
+        // EventGuidanceService already falls back to a static template, but we still guard the call so
+        // even a catastrophic failure degrades to "send without guidance" rather than dropping the alert.
+        EventGuidanceService.EventGuidance guidance = null;
+        try {
+            guidance = eventGuidanceService.guidanceFor(alert.getAlertType(), alert.getSeverity().name());
+        } catch (final Throwable t) {
+            LOGGER.warn("Event guidance failed for alert id={}; delivering alert without guidance: {}",
+                    alert.getId(), t.toString());
+        }
         final WebhookPayload payload = WebhookPayload.builder()
                 .eventType(EVENT_TYPE)
                 .message(alert.getMessage())
