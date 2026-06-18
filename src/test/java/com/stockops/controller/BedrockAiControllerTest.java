@@ -8,6 +8,8 @@ import com.stockops.ai.bedrock.KnowledgeBaseContextProvider;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
 import com.stockops.ai.bedrock.dto.BedrockOpsSummaryResponse;
+import com.stockops.ai.bedrock.job.AssistantJob;
+import com.stockops.ai.bedrock.job.AssistantJobService;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryRequest;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryResponse;
 import com.stockops.ai.bedrock.dto.BedrockRecommendationExplanationResponse;
@@ -45,6 +47,7 @@ class BedrockAiControllerTest {
     @Mock AiRagRateLimiter ragRateLimiter;
     @Mock BedrockConverseOrchestrator converseOrchestrator;
     @Mock KnowledgeBaseContextProvider knowledgeBaseContextProvider;
+    @Mock AssistantJobService assistantJobService;
     MockMvc mockMvc;
     final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -52,7 +55,7 @@ class BedrockAiControllerTest {
     void setUp() {
         mockMvc = MockMvcBuilders.standaloneSetup(
                 new BedrockAiController(recommendationService, bedrockAiFacade, ragRateLimiter,
-                        converseOrchestrator, knowledgeBaseContextProvider)).build();
+                        converseOrchestrator, knowledgeBaseContextProvider, assistantJobService)).build();
     }
 
     @Test
@@ -98,6 +101,37 @@ class BedrockAiControllerTest {
 
         verify(knowledgeBaseContextProvider).retrieveContext("창고 2 재고 알려줘");
         verify(converseOrchestrator).converse(any(), any());
+    }
+
+    @Test
+    void createAssistantJob_returns202WithJobId() throws Exception {
+        when(assistantJobService.createJob(any())).thenReturn("job-123");
+
+        mockMvc.perform(post("/api/v1/ai/bedrock/assistant/jobs")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new BedrockAgentInvokeRequest("창고 2 재고 알려줘", null, null, null))))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.jobId").value("job-123"));
+    }
+
+    @Test
+    void getAssistantJob_returnsDoneResultWhenComplete() throws Exception {
+        when(assistantJobService.getJob("job-123")).thenReturn(
+                AssistantJob.done(BedrockAgentInvokeResponse.of("창고 2 재고는 충분합니다.", "sess-9", false)));
+
+        mockMvc.perform(get("/api/v1/ai/bedrock/assistant/jobs/job-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DONE"))
+                .andExpect(jsonPath("$.result.answer").value("창고 2 재고는 충분합니다."));
+    }
+
+    @Test
+    void getAssistantJob_returns404WhenUnknown() throws Exception {
+        when(assistantJobService.getJob("missing")).thenReturn(null);
+
+        mockMvc.perform(get("/api/v1/ai/bedrock/assistant/jobs/missing"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

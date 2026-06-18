@@ -4,9 +4,13 @@ import com.stockops.ai.bedrock.AiRagRateLimiter;
 import com.stockops.ai.bedrock.BedrockAiFacade;
 import com.stockops.ai.bedrock.BedrockConverseOrchestrator;
 import com.stockops.ai.bedrock.KnowledgeBaseContextProvider;
+import com.stockops.ai.bedrock.dto.AssistantJobCreatedResponse;
+import com.stockops.ai.bedrock.dto.AssistantJobStatusResponse;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeRequest;
 import com.stockops.ai.bedrock.dto.BedrockAgentInvokeResponse;
 import com.stockops.ai.bedrock.dto.BedrockOpsSummaryResponse;
+import com.stockops.ai.bedrock.job.AssistantJob;
+import com.stockops.ai.bedrock.job.AssistantJobService;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryRequest;
 import com.stockops.ai.bedrock.dto.BedrockRagQueryResponse;
 import com.stockops.ai.bedrock.dto.BedrockRecommendationExplanationResponse;
@@ -34,17 +38,20 @@ public class BedrockAiController {
     private final AiRagRateLimiter ragRateLimiter;
     private final BedrockConverseOrchestrator converseOrchestrator;
     private final KnowledgeBaseContextProvider knowledgeBaseContextProvider;
+    private final AssistantJobService assistantJobService;
 
     public BedrockAiController(final AIRecommendationService recommendationService,
                                final BedrockAiFacade bedrockAiFacade,
                                final AiRagRateLimiter ragRateLimiter,
                                final BedrockConverseOrchestrator converseOrchestrator,
-                               final KnowledgeBaseContextProvider knowledgeBaseContextProvider) {
+                               final KnowledgeBaseContextProvider knowledgeBaseContextProvider,
+                               final AssistantJobService assistantJobService) {
         this.recommendationService = recommendationService;
         this.bedrockAiFacade = bedrockAiFacade;
         this.ragRateLimiter = ragRateLimiter;
         this.converseOrchestrator = converseOrchestrator;
         this.knowledgeBaseContextProvider = knowledgeBaseContextProvider;
+        this.assistantJobService = assistantJobService;
     }
 
     @PostMapping("/recommendations/{recommendationId}/explain")
@@ -102,5 +109,42 @@ public class BedrockAiController {
         }
         final String documentContext = knowledgeBaseContextProvider.retrieveContext(request.message());
         return ResponseEntity.ok(converseOrchestrator.converse(request, documentContext));
+    }
+
+    /**
+     * Async variant of {@link #assistant}: starts the conversation on a worker thread and returns a
+     * job id immediately, so the client polls {@link #getAssistantJob} instead of holding one long
+     * request open (which fought the frontend axios / proxy read timeouts on slow tool-use turns).
+     *
+     * @param request        user message + optional scope/session
+     * @param authentication current user (for rate limiting)
+     * @return 202 Accepted with the job id to poll
+     */
+    @PostMapping("/assistant/jobs")
+    @PreAuthorize("@permissionChecker.hasPermission('AI_RECOMMENDATION_READ')")
+    public ResponseEntity<AssistantJobCreatedResponse> createAssistantJob(
+            @Valid @RequestBody final BedrockAgentInvokeRequest request,
+            final Authentication authentication) {
+        if (authentication != null) {
+            ragRateLimiter.checkRagLimit(authentication.getName());
+        }
+        final String jobId = assistantJobService.createJob(request);
+        return ResponseEntity.accepted().body(new AssistantJobCreatedResponse(jobId));
+    }
+
+    /**
+     * Returns the status/result of an async assistant job.
+     *
+     * @param jobId job identifier returned by {@link #createAssistantJob}
+     * @return the job state, or 404 when unknown/expired
+     */
+    @GetMapping("/assistant/jobs/{jobId}")
+    @PreAuthorize("@permissionChecker.hasPermission('AI_RECOMMENDATION_READ')")
+    public ResponseEntity<AssistantJobStatusResponse> getAssistantJob(@PathVariable final String jobId) {
+        final AssistantJob job = assistantJobService.getJob(jobId);
+        if (job == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(new AssistantJobStatusResponse(jobId, job.status(), job.result(), job.error()));
     }
 }
