@@ -3,7 +3,6 @@ package com.stockops.service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.stockops.entity.ExpiryAlert;
-import com.stockops.entity.Inventory;
 import com.stockops.entity.Lot;
 import com.stockops.repository.ExpiryAlertRepository;
 import com.stockops.repository.InventoryRepository;
@@ -11,7 +10,10 @@ import com.stockops.repository.LotRepository;
 import com.stockops.config.MetricsConfig;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -58,31 +60,43 @@ public class ExpiryAlertService {
         final LocalDate today = LocalDate.now();
         final List<Lot> lotsWithExpiry = lotRepository.findActiveLotsWithExpiry();
 
+        // Select lots within the alerting window first, then resolve their on-hand stock in a single
+        // grouped query (instead of one findByLotId call per lot).
+        final List<Lot> candidateLots = new ArrayList<>();
         for (final Lot lot : lotsWithExpiry) {
             if (lot.getExpiryDate() == null) {
                 continue;
             }
-
             final long daysUntilExpiry = ChronoUnit.DAYS.between(today, lot.getExpiryDate());
             if (daysUntilExpiry >= 0 && daysUntilExpiry <= INFO_THRESHOLD_DAYS) {
-                createAlertIfNeeded(lot, (int) daysUntilExpiry);
+                candidateLots.add(lot);
             }
+        }
+
+        if (candidateLots.isEmpty()) {
+            log.info("Expiry alert calculation completed");
+            return;
+        }
+
+        final Map<Long, Integer> quantityByLot = new HashMap<>();
+        final List<Long> lotIds = candidateLots.stream().map(Lot::getId).toList();
+        for (final Object[] row : inventoryRepository.sumPositiveQuantityByLotIdsIn(lotIds)) {
+            quantityByLot.put((Long) row[0], ((Long) row[1]).intValue());
+        }
+
+        for (final Lot lot : candidateLots) {
+            final int totalQuantity = quantityByLot.getOrDefault(lot.getId(), 0);
+            if (totalQuantity <= 0) {
+                continue;
+            }
+            final int daysUntilExpiry = (int) ChronoUnit.DAYS.between(today, lot.getExpiryDate());
+            createAlert(lot, daysUntilExpiry, totalQuantity);
         }
 
         log.info("Expiry alert calculation completed");
     }
 
-    private void createAlertIfNeeded(final Lot lot, final int daysUntilExpiry) {
-        final int totalQuantity = inventoryRepository.findByLotId(lot.getId()).stream()
-                .map(Inventory::getQuantity)
-                .filter(quantity -> quantity != null && quantity > 0)
-                .mapToInt(Integer::intValue)
-                .sum();
-
-        if (totalQuantity <= 0) {
-            return;
-        }
-
+    private void createAlert(final Lot lot, final int daysUntilExpiry, final int totalQuantity) {
         final ExpiryAlert alert = new ExpiryAlert();
         alert.setLotId(lot.getId());
         alert.setProductId(lot.getProductId());

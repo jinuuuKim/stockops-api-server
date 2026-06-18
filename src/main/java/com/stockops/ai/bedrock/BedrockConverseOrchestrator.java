@@ -174,7 +174,8 @@ public class BedrockConverseOrchestrator {
 
         try (BedrockRuntimeClient client = clientFactory.create(properties.getRegion())) {
             for (int turn = 0; turn <= properties.getMaxToolTurns(); turn++) {
-                final ConverseResponse response = client.converse(buildRequest(modelReference, system, messages));
+                final ConverseResponse response = converseWithSpan(client,
+                        buildRequest(modelReference, system, messages), modelReference, "turn_" + turn);
                 final Message assistant = response.output().message();
                 messages.add(assistant);
 
@@ -276,7 +277,7 @@ public class BedrockConverseOrchestrator {
                             .maxTokens(400)
                             .build())
                     .build();
-            final ConverseResponse response = client.converse(request);
+            final ConverseResponse response = converseWithSpan(client, request, modelReference, "summarize");
             return extractText(response.output().message());
         } catch (final Exception e) {
             log.warn("[ChatHistory] summarization failed (degrading to sliding window): {}", e.getMessage());
@@ -338,7 +339,7 @@ public class BedrockConverseOrchestrator {
             }
             final ToolUseBlock toolUse = block.toolUse();
             final String inputJson = documentToJson(toolUse.input());
-            final AgentToolResult result = toolDispatcher.dispatch(toolUse.name(), inputJson);
+            final AgentToolResult result = dispatchWithSpan(toolUse.name(), inputJson);
             toolResults.add(ContentBlock.fromToolResult(ToolResultBlock.builder()
                     .toolUseId(toolUse.toolUseId())
                     .content(ToolResultContentBlock.builder().text(toolResultText(result)).build())
@@ -346,6 +347,79 @@ public class BedrockConverseOrchestrator {
                     .build()));
         }
         return Message.builder().role(ConversationRole.USER).content(toolResults).build();
+    }
+
+    /**
+     * Wraps a single Bedrock {@code Converse} model round-trip in a child span so every model call
+     * in the tool-use loop (and the history-summarization call) is individually visible in the trace
+     * waterfall, with model id, stop reason, token usage, and phase. The AWS SDK v2 client is not
+     * auto-instrumented, so without this each model HTTP call collapses invisibly into the parent
+     * {@code bedrock-assistant-converse} span.
+     *
+     * @param client Bedrock runtime client
+     * @param request the Converse request to execute
+     * @param modelReference model id/profile being invoked (tagged for visibility)
+     * @param phase loop phase label (e.g. {@code turn_0}, {@code summarize}) used in the span name
+     * @return the Converse response
+     */
+    private ConverseResponse converseWithSpan(final BedrockRuntimeClient client, final ConverseRequest request,
+                                              final String modelReference, final String phase) {
+        final Observation observation = Observation
+                .createNotStarted("ai.bedrock.converse_call", observationRegistry)
+                .contextualName("bedrock-converse-" + phase);
+        observation.start();
+        try (Observation.Scope scope = observation.openScope()) {
+            final ConverseResponse response = client.converse(request);
+            observation.highCardinalityKeyValue("bedrock.model", String.valueOf(modelReference));
+            observation.highCardinalityKeyValue("bedrock.phase", phase);
+            if (response.stopReason() != null) {
+                observation.highCardinalityKeyValue("bedrock.stop_reason", response.stopReasonAsString());
+            }
+            if (response.usage() != null) {
+                observation.highCardinalityKeyValue("bedrock.input_tokens",
+                        String.valueOf(response.usage().inputTokens()));
+                observation.highCardinalityKeyValue("bedrock.output_tokens",
+                        String.valueOf(response.usage().outputTokens()));
+            }
+            return response;
+        } catch (final RuntimeException e) {
+            observation.error(e);
+            throw e;
+        } finally {
+            observation.stop();
+        }
+    }
+
+    /**
+     * Dispatches a single tool call inside its own child span, so the tool boundary — and the DB
+     * queries / ai-module REST calls it triggers — nest under the assistant trace tagged with the
+     * tool name and outcome. Without this, tool execution and its data access are invisible in the
+     * waterfall (only the enclosing converse span shows). The opened scope makes this span the
+     * active parent, so downstream JDBC and {@code @Observed} REST-client spans attach correctly.
+     *
+     * @param toolName the tool requested by the model
+     * @param inputJson serialized tool arguments
+     * @return the tool execution result
+     */
+    private AgentToolResult dispatchWithSpan(final String toolName, final String inputJson) {
+        final Observation observation = Observation
+                .createNotStarted("ai.bedrock.tool", observationRegistry)
+                .contextualName("tool:" + toolName);
+        observation.start();
+        try (Observation.Scope scope = observation.openScope()) {
+            observation.highCardinalityKeyValue("tool.name", toolName);
+            final AgentToolResult result = toolDispatcher.dispatch(toolName, inputJson);
+            observation.highCardinalityKeyValue("tool.outcome", result.success() ? "success" : "error");
+            if (!result.success() && result.errorMessage() != null) {
+                observation.highCardinalityKeyValue("tool.error_message", result.errorMessage());
+            }
+            return result;
+        } catch (final RuntimeException e) {
+            observation.error(e);
+            throw e;
+        } finally {
+            observation.stop();
+        }
     }
 
     private String toolResultText(final AgentToolResult result) {

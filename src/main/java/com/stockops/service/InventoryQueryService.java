@@ -22,7 +22,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -127,9 +130,8 @@ public class InventoryQueryService {
                     Comparator.nullsLast(Comparator.reverseOrder())));
         }
 
-        return scopeGuard.filterByLocationScope(transactions, InventoryTransaction::getLocationId).stream()
-                .map(this::toTransactionDTO)
-                .toList();
+        return toTransactionDtos(
+                scopeGuard.filterByLocationScope(transactions, InventoryTransaction::getLocationId));
     }
 
     /**
@@ -139,13 +141,13 @@ public class InventoryQueryService {
      * @return filtered recent transactions
      */
     public List<InventoryTransactionDTO> getRecentTransactions(final int limit) {
-        return scopeGuard.filterByLocationScope(
+        final List<InventoryTransaction> visible = scopeGuard.filterByLocationScope(
                         transactionRepository.findTop50ByOrderByCreatedAtDesc(),
                         InventoryTransaction::getLocationId)
                 .stream()
                 .limit(Math.max(0, limit))
-                .map(this::toTransactionDTO)
                 .toList();
+        return toTransactionDtos(visible);
     }
 
     private static final int SEARCH_LIMIT = 20;
@@ -265,14 +267,35 @@ public class InventoryQueryService {
     }
 
     private List<InventoryDTO> toInventoryDtos(final List<Inventory> inventory) {
-        return inventory.stream().map(this::toDTO).toList();
+        if (inventory.isEmpty()) {
+            return List.of();
+        }
+        // Batch-fetch related entities once per type (3 queries total) instead of 3 per row,
+        // which previously produced an N+1 query explosion during DTO mapping.
+        final Map<Long, Product> products =
+                productsByIds(inventory.stream().map(Inventory::getProductId).toList());
+        final Map<Long, Location> locations =
+                locationsByIds(inventory.stream().map(Inventory::getLocationId).toList());
+        final Map<Long, Lot> lots =
+                lotsByIds(inventory.stream().map(Inventory::getLotId).toList());
+        return inventory.stream()
+                .map(row -> buildInventoryDTO(
+                        row,
+                        products.get(row.getProductId()),
+                        locations.get(row.getLocationId()),
+                        row.getLotId() == null ? null : lots.get(row.getLotId())))
+                .toList();
     }
 
     private InventoryDTO toDTO(final Inventory inventory) {
         final Product product = productRepository.findById(inventory.getProductId()).orElse(null);
         final Location location = locationRepository.findById(inventory.getLocationId()).orElse(null);
         final Lot lot = inventory.getLotId() == null ? null : lotRepository.findById(inventory.getLotId()).orElse(null);
+        return buildInventoryDTO(inventory, product, location, lot);
+    }
 
+    private InventoryDTO buildInventoryDTO(final Inventory inventory, final Product product,
+                                           final Location location, final Lot lot) {
         return new InventoryDTO(
                 inventory.getId(),
                 inventory.getProductId(),
@@ -291,11 +314,29 @@ public class InventoryQueryService {
                 inventory.getUpdatedAt());
     }
 
-    private InventoryTransactionDTO toTransactionDTO(final InventoryTransaction transaction) {
-        final Product product = productRepository.findById(transaction.getProductId()).orElse(null);
-        final Location location = locationRepository.findById(transaction.getLocationId()).orElse(null);
-        final Lot lot = transaction.getLotId() == null ? null : lotRepository.findById(transaction.getLotId()).orElse(null);
+    private List<InventoryTransactionDTO> toTransactionDtos(final List<InventoryTransaction> transactions) {
+        if (transactions.isEmpty()) {
+            return List.of();
+        }
+        // Batch-fetch related entities once per type instead of 3 lookups per transaction row.
+        final Map<Long, Product> products =
+                productsByIds(transactions.stream().map(InventoryTransaction::getProductId).toList());
+        final Map<Long, Location> locations =
+                locationsByIds(transactions.stream().map(InventoryTransaction::getLocationId).toList());
+        final Map<Long, Lot> lots =
+                lotsByIds(transactions.stream().map(InventoryTransaction::getLotId).toList());
+        return transactions.stream()
+                .map(txn -> buildTransactionDTO(
+                        txn,
+                        products.get(txn.getProductId()),
+                        locations.get(txn.getLocationId()),
+                        txn.getLotId() == null ? null : lots.get(txn.getLotId())))
+                .toList();
+    }
 
+    private InventoryTransactionDTO buildTransactionDTO(final InventoryTransaction transaction,
+                                                        final Product product, final Location location,
+                                                        final Lot lot) {
         return new InventoryTransactionDTO(
                 transaction.getId(),
                 transaction.getType(),
@@ -316,6 +357,37 @@ public class InventoryQueryService {
 
     private int nullSafeInt(final Integer value) {
         return value == null ? 0 : value;
+    }
+
+    private Map<Long, Product> productsByIds(final List<Long> ids) {
+        final Set<Long> distinct = distinctNonNull(ids);
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+        return productRepository.findAllById(distinct).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+    }
+
+    private Map<Long, Location> locationsByIds(final List<Long> ids) {
+        final Set<Long> distinct = distinctNonNull(ids);
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+        return locationRepository.findAllById(distinct).stream()
+                .collect(Collectors.toMap(Location::getId, Function.identity()));
+    }
+
+    private Map<Long, Lot> lotsByIds(final List<Long> ids) {
+        final Set<Long> distinct = distinctNonNull(ids);
+        if (distinct.isEmpty()) {
+            return Map.of();
+        }
+        return lotRepository.findAllById(distinct).stream()
+                .collect(Collectors.toMap(Lot::getId, Function.identity()));
+    }
+
+    private static Set<Long> distinctNonNull(final List<Long> ids) {
+        return ids.stream().filter(Objects::nonNull).collect(Collectors.toSet());
     }
 
     public InventoryQueryService(final InventoryRepository inventoryRepository, final InventoryTransactionRepository transactionRepository, final ProductRepository productRepository, final LocationRepository locationRepository, final LotRepository lotRepository, final ScopeGuard scopeGuard) {

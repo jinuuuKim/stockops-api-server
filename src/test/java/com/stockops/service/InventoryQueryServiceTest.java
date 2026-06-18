@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.stockops.entity.Inventory;
@@ -23,6 +26,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class InventoryQueryServiceTest {
@@ -55,8 +59,8 @@ class InventoryQueryServiceTest {
 
         when(inventoryRepository.findAll()).thenReturn(List.of(visibleInventory, hiddenInventory));
         when(scopeGuard.filterByLocationScope(any(), any())).thenReturn(List.of(visibleInventory));
-        when(productRepository.findById(1000L)).thenReturn(Optional.of(product(1000L, "P-1000", "Visible Product")));
-        when(locationRepository.findById(100L)).thenReturn(Optional.of(location(100L, "LOC-100", "Scoped Location")));
+        when(productRepository.findAllById(any())).thenReturn(List.of(product(1000L, "P-1000", "Visible Product")));
+        when(locationRepository.findAllById(any())).thenReturn(List.of(location(100L, "LOC-100", "Scoped Location")));
 
         assertThat(inventoryQueryService.getAllInventory())
                 .singleElement()
@@ -65,6 +69,25 @@ class InventoryQueryServiceTest {
                     assertThat(dto.locationId()).isEqualTo(100L);
                     assertThat(dto.productName()).isEqualTo("Visible Product");
                 });
+    }
+
+    @Test
+    void getAllInventoryBatchesRelatedLookupsToAvoidNPlusOne() {
+        final Inventory firstRow = inventory(1L, 100L, 1000L, 5);
+        final Inventory secondRow = inventory(2L, 100L, 1000L, 3);
+
+        when(inventoryRepository.findAll()).thenReturn(List.of(firstRow, secondRow));
+        when(scopeGuard.filterByLocationScope(any(), any())).thenReturn(List.of(firstRow, secondRow));
+        when(productRepository.findAllById(any())).thenReturn(List.of(product(1000L, "P-1000", "Visible Product")));
+        when(locationRepository.findAllById(any())).thenReturn(List.of(location(100L, "LOC-100", "Scoped Location")));
+
+        assertThat(inventoryQueryService.getAllInventory()).hasSize(2);
+
+        // Related entities are resolved with a single batched lookup per type, not once per row.
+        verify(productRepository, times(1)).findAllById(any());
+        verify(locationRepository, times(1)).findAllById(any());
+        verify(productRepository, never()).findById(any());
+        verify(locationRepository, never()).findById(any());
     }
 
     @Test
@@ -91,6 +114,7 @@ class InventoryQueryServiceTest {
 
     private Product product(final Long id, final String barcode, final String name) {
         final Product product = new Product();
+        ReflectionTestUtils.setField(product, "id", id);
         product.setBarcode(barcode);
         product.setName(name);
         return product;

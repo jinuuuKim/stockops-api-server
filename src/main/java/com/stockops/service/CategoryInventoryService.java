@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,10 @@ public class CategoryInventoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + categoryId));
 
         final Set<Long> allCategoryIds = new HashSet<>();
-        collectDescendantCategoryIds(categoryId, allCategoryIds);
+        // Capture category names while traversing so per-subcategory name lookups don't re-query.
+        final Map<Long, String> categoryNames = new HashMap<>();
+        categoryNames.put(categoryId, root.getName());
+        collectDescendantCategoryIds(categoryId, allCategoryIds, categoryNames);
         allCategoryIds.add(categoryId);
 
         final List<Product> allProducts = productRepository.findByCategoryIdInAndDeletedFalse(
@@ -66,17 +70,17 @@ public class CategoryInventoryService {
         final Map<Long, List<Product>> productsByCategory = allProducts.stream()
                 .collect(Collectors.groupingBy(p -> p.getCategoryId() != null ? p.getCategoryId() : -1L));
 
-        final Map<Long, List<Inventory>> inventoryByProduct = allProducts.stream()
-                .map(Product::getId)
-                .distinct()
-                .collect(Collectors.toMap(
-                        pid -> pid,
-                        pid -> inventoryRepository.findByProductId(pid)
-                ));
+        // Fetch inventory for all products in a single query, then group in memory by product,
+        // instead of one findByProductId call per product.
+        final List<Long> productIds = allProducts.stream().map(Product::getId).distinct().toList();
+        final Map<Long, List<Inventory>> inventoryByProduct = productIds.isEmpty()
+                ? Map.of()
+                : inventoryRepository.findByProductIdIn(productIds).stream()
+                        .collect(Collectors.groupingBy(Inventory::getProductId));
 
         final List<SubcategoryInventoryDTO> subcategories = allCategoryIds.stream()
                 .filter(id -> !id.equals(categoryId))
-                .map(id -> buildSubcategoryDTO(id, productsByCategory, inventoryByProduct))
+                .map(id -> buildSubcategoryDTO(id, categoryNames, productsByCategory, inventoryByProduct))
                 .toList();
 
         long totalProducts = allProducts.size();
@@ -102,23 +106,24 @@ public class CategoryInventoryService {
         );
     }
 
-    private void collectDescendantCategoryIds(final Long parentId, final Set<Long> collected) {
+    private void collectDescendantCategoryIds(final Long parentId, final Set<Long> collected,
+                                              final Map<Long, String> categoryNames) {
         final List<Category> children = categoryRepository.findByParentIdAndActiveTrueOrderBySortOrderAsc(parentId);
         for (Category child : children) {
+            categoryNames.put(child.getId(), child.getName());
             if (collected.add(child.getId())) {
-                collectDescendantCategoryIds(child.getId(), collected);
+                collectDescendantCategoryIds(child.getId(), collected, categoryNames);
             }
         }
     }
 
     private SubcategoryInventoryDTO buildSubcategoryDTO(
             final Long catId,
+            final Map<Long, String> categoryNames,
             final Map<Long, List<Product>> productsByCategory,
             final Map<Long, List<Inventory>> inventoryByProduct) {
 
-        final String catName = categoryRepository.findById(catId)
-                .map(Category::getName)
-                .orElse("");
+        final String catName = categoryNames.getOrDefault(catId, "");
 
         final List<Product> products = productsByCategory.getOrDefault(catId, List.of());
         long productCount = products.size();

@@ -118,4 +118,18 @@ public interface InventoryTransactionRepository extends JpaRepository<InventoryT
             @Param("type") String type,
             @Param("start") Instant start,
             @Param("end") Instant end);
+
+    /**
+     * Sums transaction quantities of a type grouped by product across all locations within a date range.
+     *
+     * @param type transaction type
+     * @param start range start
+     * @param end range end
+     * @return list of [productId, totalQuantity] pairs
+     */
+    @Query("SELECT t.productId, COALESCE(SUM(t.quantity), 0) FROM InventoryTransaction t WHERE t.type = :type AND t.createdAt BETWEEN :start AND :end GROUP BY t.productId")
+    List<Object[]> sumQuantityByTypeAndCreatedAtBetween(
+            @Param("type") String type,
+            @Param("start") Instant start,
+            @Param("end") Instant end);
 }

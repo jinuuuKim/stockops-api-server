@@ -221,7 +221,7 @@ public class ScopeGuard {
         }
 
         final Map<Long, LocationScope> scopes = new HashMap<>();
-        for (Location location : locationRepository.findAllById(locationIds)) {
+        for (Location location : locationRepository.findByIdInWithWarehouseAndCenter(locationIds)) {
             final Long warehouseId = location.getWarehouse() == null ? null : location.getWarehouse().getId();
             final Long centerId = location.getWarehouse() == null || location.getWarehouse().getCenter() == null
                     ? null

@@ -60,11 +60,54 @@ public class InventoryTurnoverReportService {
         Instant endInstant = endDate.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         int periodDays = (int) ChronoUnit.DAYS.between(startDate, endDate) + 1;
 
-        List<Product> products = productRepository.findAll();
-        List<InventoryTurnoverDTO> results = new ArrayList<>();
+        // Outbound quantities grouped by product (all locations), in one query.
+        Map<Long, Long> cogsQuantityByProduct = transactionRepository
+                .sumQuantityByTypeAndCreatedAtBetween(OUTBOUND_TYPE, startInstant, endInstant).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
 
-        for (Product product : products) {
-            InventoryTurnoverDTO dto = calculateForProduct(product, startInstant, endInstant, periodDays);
+        // Current (ending) inventory grouped by product (all locations), in one query.
+        Map<Long, Long> endingInventoryByProduct = inventoryRepository
+                .sumQuantityGroupedByProduct().stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+
+        // Beginning inventory: ending + outbound during period (reverse calculation).
+        Map<Long, Long> beginningInventoryByProduct = endingInventoryByProduct.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> entry.getValue() + cogsQuantityByProduct.getOrDefault(entry.getKey(), 0L)
+                ));
+
+        // Also include products that had outbound but zero ending inventory.
+        for (Map.Entry<Long, Long> entry : cogsQuantityByProduct.entrySet()) {
+            beginningInventoryByProduct.putIfAbsent(entry.getKey(), entry.getValue());
+            endingInventoryByProduct.putIfAbsent(entry.getKey(), 0L);
+        }
+
+        // Load products in one batch; soft-deleted products are excluded by Product's @SQLRestriction,
+        // so a product present only via (non-restricted) inventory rows resolves to null and is skipped
+        // — matching the previous findAll()-driven behavior.
+        List<Long> productIds = new ArrayList<>(beginningInventoryByProduct.keySet());
+        Map<Long, Product> productMap = productRepository.findAllById(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, p -> p));
+
+        List<InventoryTurnoverDTO> results = new ArrayList<>();
+        for (Long productId : productIds) {
+            Product product = productMap.get(productId);
+            if (product == null) {
+                continue;
+            }
+            long beginningQty = beginningInventoryByProduct.getOrDefault(productId, 0L);
+            long endingQty = endingInventoryByProduct.getOrDefault(productId, 0L);
+            long outboundQty = cogsQuantityByProduct.getOrDefault(productId, 0L);
+
+            InventoryTurnoverDTO dto = buildDTO(product, (int) beginningQty, (int) endingQty,
+                    (int) outboundQty, periodDays);
             if (dto != null) {
                 results.add(dto);
             }
@@ -154,18 +197,6 @@ public class InventoryTurnoverReportService {
 
         results.sort((a, b) -> b.turnoverRate().compareTo(a.turnoverRate()));
         return results;
-    }
-
-    private InventoryTurnoverDTO calculateForProduct(Product product, Instant start, Instant end, int periodDays) {
-        long outboundQty = transactionRepository.sumQuantityByProductIdAndTypeAndCreatedAtBetween(
-                product.getId(), OUTBOUND_TYPE, start, end);
-
-        long endingQty = inventoryRepository.sumQuantityByProductId(product.getId());
-
-        // Reverse-calculate beginning inventory: beginning = ending + outbound during period
-        long beginningQty = endingQty + outboundQty;
-
-        return buildDTO(product, (int) beginningQty, (int) endingQty, (int) outboundQty, periodDays);
     }
 
     private InventoryTurnoverDTO buildDTO(Product product, int beginningQty, int endingQty,

@@ -51,7 +51,7 @@ class ScopeGuardTest {
 
         when(warehouseRepository.findById(10L)).thenReturn(java.util.Optional.of(warehouseOne));
         when(warehouseRepository.findById(20L)).thenReturn(java.util.Optional.of(warehouseTwo));
-        when(locationRepository.findAllById(any())).thenReturn(List.of(locationOne, locationTwo));
+        when(locationRepository.findByIdInWithWarehouseAndCenter(any())).thenReturn(List.of(locationOne, locationTwo));
 
         assertThat(scopeGuard.canAccessWarehouse(10L)).isTrue();
         assertThat(scopeGuard.canAccessWarehouse(20L)).isFalse();

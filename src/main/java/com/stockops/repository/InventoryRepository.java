@@ -50,6 +50,14 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
 
     List<Inventory> findByProductId(Long productId);
 
+    /**
+     * Finds all inventory rows for the given products in a single query.
+     *
+     * @param productIds product identifiers
+     * @return inventory rows for the products
+     */
+    List<Inventory> findByProductIdIn(List<Long> productIds);
+
     List<Inventory> findByLocationId(Long locationId);
 
     List<Inventory> findAllByLocationIdIn(List<Long> locationIds);
@@ -115,5 +123,23 @@ public interface InventoryRepository extends JpaRepository<Inventory, Long> {
      */
     @Query("SELECT i.productId, COALESCE(SUM(COALESCE(i.quantity, 0)), 0) FROM Inventory i WHERE i.locationId IN :locationIds GROUP BY i.productId")
     List<Object[]> sumQuantityByLocationIdsIn(@Param("locationIds") List<Long> locationIds);
+
+    /**
+     * Sums inventory quantity grouped by product across all locations.
+     *
+     * @return list of [productId, totalQuantity] pairs
+     */
+    @Query("SELECT i.productId, COALESCE(SUM(COALESCE(i.quantity, 0)), 0) FROM Inventory i GROUP BY i.productId")
+    List<Object[]> sumQuantityGroupedByProduct();
+
+    /**
+     * Sums positive inventory quantity grouped by lot for the given lots, in a single query.
+     * Rows with non-positive quantity are excluded, matching per-row {@code quantity > 0} filtering.
+     *
+     * @param lotIds lot identifiers
+     * @return list of [lotId, totalPositiveQuantity] pairs (lots with no positive stock are absent)
+     */
+    @Query("SELECT i.lotId, COALESCE(SUM(i.quantity), 0) FROM Inventory i WHERE i.lotId IN :lotIds AND i.quantity > 0 GROUP BY i.lotId")
+    List<Object[]> sumPositiveQuantityByLotIdsIn(@Param("lotIds") List<Long> lotIds);
 
 }
