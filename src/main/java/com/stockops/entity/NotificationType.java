@@ -9,5 +9,6 @@ package com.stockops.entity;
 public enum NotificationType {
     LOW_STOCK,
     EXPIRY_APPROACHING,
-    PURCHASE_ORDER_STATUS_CHANGED
+    PURCHASE_ORDER_STATUS_CHANGED,
+    ENVIRONMENT_ALERT
 }

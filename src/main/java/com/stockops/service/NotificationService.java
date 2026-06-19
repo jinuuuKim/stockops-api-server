@@ -1,6 +1,8 @@
 package com.stockops.service;
 
 import com.stockops.dto.NotificationDTO;
+import com.stockops.entity.AlertSeverity;
+import com.stockops.entity.EnvironmentAlert;
 import com.stockops.entity.ExpiryAlert;
 import com.stockops.entity.Inventory;
 import com.stockops.entity.Location;
@@ -9,13 +11,23 @@ import com.stockops.entity.NotificationType;
 import com.stockops.entity.Product;
 import com.stockops.entity.PurchaseOrder;
 import com.stockops.entity.PurchaseOrderStatus;
+import com.stockops.entity.SensorDevice;
 import com.stockops.entity.User;
+import com.stockops.entity.Warehouse;
 import com.stockops.exception.ResourceNotFoundException;
+import com.stockops.notification.lowstock.LowStockRule;
+import com.stockops.repository.EnvironmentAlertRepository;
 import com.stockops.repository.ExpiryAlertRepository;
 import com.stockops.repository.InventoryRepository;
 import com.stockops.repository.LocationRepository;
 import com.stockops.repository.NotificationRepository;
 import com.stockops.repository.ProductRepository;
+import com.stockops.repository.SensorDeviceRepository;
+import com.stockops.repository.WarehouseRepository;
+import com.stockops.security.ScopeAccessProfile;
+import com.stockops.security.ScopeAccessService;
+import com.stockops.security.ScopeAssignment;
+import com.stockops.security.ScopeType;
 import com.stockops.config.MetricsConfig;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -46,6 +58,10 @@ public class NotificationService {
     private final ProductRepository productRepository;
     private final LocationRepository locationRepository;
     private final ExpiryAlertRepository expiryAlertRepository;
+    private final EnvironmentAlertRepository environmentAlertRepository;
+    private final SensorDeviceRepository sensorDeviceRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final ScopeAccessService scopeAccessService;
     private final MetricsConfig metricsConfig;
 
     /**
@@ -144,6 +160,137 @@ public class NotificationService {
     private void syncSystemNotifications(final User user) {
         syncLowStockNotifications(user);
         syncExpiryNotifications(user);
+        syncEnvironmentAlertNotifications(user);
+    }
+
+    /**
+     * Synchronizes environment (sensor) alerts into the user's in-app notification center.
+     *
+     * <p>Unlike low-stock/expiry, sensor alerts are <em>scoped</em>: a user only sees an alert when
+     * their role grants visibility over the sensor's location — the manager of the sensor's
+     * warehouse (WAREHOUSE scope), the manager of its parent center (CENTER scope), or an
+     * administrator (ADMIN/global). STORE-scoped users never see sensor alerts. Only currently
+     * active (unresolved and unacknowledged) alerts are shown; when an alert resolves or is
+     * acknowledged it drops out of this set and the notification is removed on the next sync.
+     *
+     * @param user the user whose notifications are being synchronized
+     */
+    private void syncEnvironmentAlertNotifications(final User user) {
+        final ScopeAccessProfile profile = scopeAccessService.buildUserProfile(user);
+
+        final List<EnvironmentAlert> activeAlerts =
+                environmentAlertRepository.findByResolvedAtIsNullAndAcknowledgedFalse();
+        if (activeAlerts.isEmpty()) {
+            removeInactiveNotifications(user.getId(), NotificationType.ENVIRONMENT_ALERT, Set.of());
+            return;
+        }
+
+        // Batch-resolve sensor -> warehouse -> center to keep the per-user sync free of N+1 queries.
+        final Map<Long, SensorDevice> sensorsById = sensorDeviceRepository.findAllById(activeAlerts.stream()
+                        .map(EnvironmentAlert::getSensorDeviceId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList())
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(SensorDevice::getId, Function.identity()));
+        final Map<Long, Warehouse> warehousesById = warehouseRepository.findAllById(sensorsById.values().stream()
+                        .map(SensorDevice::getWarehouseId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .toList())
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(Warehouse::getId, Function.identity()));
+
+        final Set<String> activeEventKeys = new HashSet<>();
+
+        for (final EnvironmentAlert alert : activeAlerts) {
+            final SensorDevice sensor = sensorsById.get(alert.getSensorDeviceId());
+            final Long warehouseId = sensor == null ? null : sensor.getWarehouseId();
+            final Warehouse warehouse = warehouseId == null ? null : warehousesById.get(warehouseId);
+            final Long centerId = (warehouse == null || warehouse.getCenter() == null)
+                    ? null : warehouse.getCenter().getId();
+
+            if (!isEnvironmentAlertVisible(profile, warehouseId, centerId)) {
+                continue;
+            }
+
+            final String eventKey = "ENV_ALERT:" + alert.getId();
+            final String title = environmentAlertTitle(alert);
+            final String message = environmentAlertMessage(alert);
+
+            activeEventKeys.add(eventKey);
+            upsertEnvironmentAlertNotification(user.getId(), eventKey, title, message);
+        }
+
+        removeInactiveNotifications(user.getId(), NotificationType.ENVIRONMENT_ALERT, activeEventKeys);
+    }
+
+    /**
+     * Whether an environment alert for the given location is visible to the scope profile.
+     * Matches on raw assignment <em>type</em> (not the flattened access sets, which would
+     * over-grant a STORE user or let a warehouse manager see sibling warehouses in their center):
+     * ADMIN/global, or a CENTER assignment on the sensor's center, or a WAREHOUSE assignment on the
+     * sensor's warehouse. Sensors with no warehouse mapping are visible to administrators only.
+     */
+    private boolean isEnvironmentAlertVisible(final ScopeAccessProfile profile,
+                                              final Long warehouseId,
+                                              final Long centerId) {
+        if (profile.global()) {
+            return true;
+        }
+        if (warehouseId == null) {
+            return false;
+        }
+        for (final ScopeAssignment assignment : profile.assignments()) {
+            if (assignment.getScope() == ScopeType.WAREHOUSE
+                    && warehouseId.equals(assignment.getWarehouseId())) {
+                return true;
+            }
+            if (assignment.getScope() == ScopeType.CENTER
+                    && centerId != null && centerId.equals(assignment.getCenterId())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private String environmentAlertTitle(final EnvironmentAlert alert) {
+        return alert.getSeverity() == AlertSeverity.CRITICAL ? "환경 위험 경보" : "환경 경고";
+    }
+
+    private String environmentAlertMessage(final EnvironmentAlert alert) {
+        return alert.getMessage() != null ? alert.getMessage() : "환경 센서 이상이 감지되었습니다.";
+    }
+
+    /**
+     * Upserts a sensor-alert notification, re-marking it unread whenever its title or message
+     * changes (e.g. a WARNING→CRITICAL escalation), so an escalation re-surfaces in the bell.
+     */
+    private void upsertEnvironmentAlertNotification(final Long userId,
+                                                    final String eventKey,
+                                                    final String title,
+                                                    final String message) {
+        final Optional<Notification> existing = notificationRepository.findByUserIdAndEventKey(userId, eventKey);
+        final boolean isNew = existing.isEmpty();
+        final Notification notification = existing.orElseGet(Notification::new);
+
+        final boolean changed = isNew
+                || !Objects.equals(notification.getTitle(), title)
+                || !Objects.equals(notification.getMessage(), message);
+
+        notification.setUserId(userId);
+        notification.setType(NotificationType.ENVIRONMENT_ALERT);
+        notification.setTitle(title);
+        notification.setMessage(message);
+        notification.setEventKey(eventKey);
+        if (changed) {
+            notification.setRead(false);
+        }
+
+        notificationRepository.save(notification);
+        if (isNew) {
+            metricsConfig.recordNotificationSent("in_app");
+        }
     }
 
     private void syncLowStockNotifications(final User user) {
@@ -167,14 +314,10 @@ public class NotificationService {
 
         for (final Inventory inventory : inventories) {
             final Product product = productsById.get(inventory.getProductId());
-            if (product == null || product.getSafetyStockQuantity() == null || product.getSafetyStockQuantity() <= 0) {
+            if (!LowStockRule.isLow(inventory, product)) {
                 continue;
             }
-
-            final int availableQuantity = Math.max(0, safeInt(inventory.getQuantity()) - safeInt(inventory.getReservedQuantity()));
-            if (availableQuantity > product.getSafetyStockQuantity()) {
-                continue;
-            }
+            final int availableQuantity = LowStockRule.availableQuantity(inventory);
 
             final Location location = locationsById.get(inventory.getLocationId());
             final String eventKey = "LOW_STOCK:" + inventory.getId();
@@ -285,13 +428,17 @@ public class NotificationService {
                 notification.getCreatedAt());
     }
 
-    public NotificationService(final NotificationRepository notificationRepository, final UserService userService, final InventoryRepository inventoryRepository, final ProductRepository productRepository, final LocationRepository locationRepository, final ExpiryAlertRepository expiryAlertRepository, final MetricsConfig metricsConfig) {
+    public NotificationService(final NotificationRepository notificationRepository, final UserService userService, final InventoryRepository inventoryRepository, final ProductRepository productRepository, final LocationRepository locationRepository, final ExpiryAlertRepository expiryAlertRepository, final EnvironmentAlertRepository environmentAlertRepository, final SensorDeviceRepository sensorDeviceRepository, final WarehouseRepository warehouseRepository, final ScopeAccessService scopeAccessService, final MetricsConfig metricsConfig) {
         this.notificationRepository = notificationRepository;
         this.userService = userService;
         this.inventoryRepository = inventoryRepository;
         this.productRepository = productRepository;
         this.locationRepository = locationRepository;
         this.expiryAlertRepository = expiryAlertRepository;
+        this.environmentAlertRepository = environmentAlertRepository;
+        this.sensorDeviceRepository = sensorDeviceRepository;
+        this.warehouseRepository = warehouseRepository;
+        this.scopeAccessService = scopeAccessService;
         this.metricsConfig = metricsConfig;
     }
 }

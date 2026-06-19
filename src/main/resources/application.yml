@@ -130,6 +130,19 @@ stockops:
       poll-interval: ${STOCKOPS_ALERT_OUTBOX_POLL_INTERVAL:PT15S}
       batch-size: ${STOCKOPS_ALERT_OUTBOX_BATCH_SIZE:20}
       max-attempts: ${STOCKOPS_ALERT_OUTBOX_MAX_ATTEMPTS:5}
+  notification:
+    # Low-stock Teams webhook scan. Complements (does not replace) the real-time in-app
+    # NotificationBell. A warehouse with any SKU at/below safety stock notifies that warehouse's
+    # and its center's webhook channels; a system-wide shortage (low-SKU share >= admin-low-ratio)
+    # also notifies the admin-role channel. Frequency is bounded by cooldown, not the scan cron.
+    low-stock:
+      enabled: ${STOCKOPS_LOW_STOCK_WEBHOOK_ENABLED:true}
+      scan-cron: ${STOCKOPS_LOW_STOCK_WEBHOOK_SCAN_CRON:0 */30 * * * ?}
+      business-zone: ${STOCKOPS_LOW_STOCK_WEBHOOK_BUSINESS_ZONE:Asia/Seoul}
+      cooldown: ${STOCKOPS_LOW_STOCK_WEBHOOK_COOLDOWN:PT6H}
+      admin-low-ratio: ${STOCKOPS_LOW_STOCK_WEBHOOK_ADMIN_RATIO:0.5}
+      admin-role: ${STOCKOPS_LOW_STOCK_WEBHOOK_ADMIN_ROLE:ADMIN}
+      max-items-per-card: ${STOCKOPS_LOW_STOCK_WEBHOOK_MAX_ITEMS:15}
   analytics:
     enabled: true
     business-zone: Asia/Seoul
